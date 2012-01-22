@@ -480,8 +480,6 @@ def SourcesMenu(sender, mediainfo = None, url = None, item_name = None):
 		
 	if (item_name is None):
 		item_name = mediainfo.title
-
-	Log(url)
 	
 	mc = MediaContainer(viewGroup = "ListInfo", title1=sender.title2, title2= item_name)
 	
@@ -490,7 +488,7 @@ def SourcesMenu(sender, mediainfo = None, url = None, item_name = None):
 		if (item['quality'] == "sponsored"):
 			continue
 				
-		Log(item)
+		# Log(item)
 		mc.Append(GetItemForSource(mediainfo = mediainfo, item = item))
 		
 	return mc
@@ -585,34 +583,34 @@ def PlayVideoNotSupported(sender, mediainfo, url):
 def PlayVideoPutLocker(sender, mediainfo, url):
 
 	# Read in hash from form.
-	Log('Requesting ' + LMWT_URL + url)
+	# Log('Requesting ' + LMWT_URL + url)
 	request = urllib2.Request(LMWT_URL + url)
 	request.add_header('User-agent', HTTP.Headers['User-agent'])
 	response = urllib2.urlopen(request)
 	
 	putlocker_url = response.geturl()
-	Log(putlocker_url)
+	# Log(putlocker_url)
 	
 	soup = BeautifulSoup(response.read())
 	params = {}
 	hash =  soup.find('input', {'name' : 'hash' })['value']
-	Log(hash)
+	# Log(hash)
 	params['hash'] = hash
 	params['confirm'] = "Continue as Free User"
 	
-	Log(params)
+	# Log(params)
 	
 	content = HTTP.Request(putlocker_url,params).content
 	playlist = re.search("playlist: \'(.*?)\'", content).group(1)
-	Log(playlist)
+	# Log(playlist)
 	
 	putlocker_host = urlparse.urlparse(putlocker_url).netloc
 	
 	final = HTTP.Request("http://" + putlocker_host + playlist).content
-	Log(final)
+	# Log(final)
 	
 	finalurl = re.search("<media:content url=\"(.*?)\"", final).group(1)
-	Log(finalurl)
+	# Log(finalurl)
 
 	return Redirect(finalurl)
 	
@@ -671,7 +669,7 @@ def GetSources(url):
 		views = item.find('span', { 'class': 'version_veiws' }).string
 		source['views'] = re.search("\D*(\d*)", views).group(1)
 		
-		Log(source)
+		# Log(source)
 		sources.append(source)
 	
 	return sources
@@ -803,7 +801,7 @@ def GetSearchResults(query=None,type=None,):
 	
 	for item in soup.findAll("div", { 'class': 'index_item index_item_ie' }):
 	
-		Log('Found item: ' + str(item))
+		# Log('Found item: ' + str(item))
 		res = MediaInfo()
 		
 		# Extract out title
@@ -824,7 +822,7 @@ def GetSearchResults(query=None,type=None,):
 		#Log("Adding item: " + str(res))
 		items.append(res)
 	
-	Log(items)
+	# Log(items)
 	return items
 	
 	
