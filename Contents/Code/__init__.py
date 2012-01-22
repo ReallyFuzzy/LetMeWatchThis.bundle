@@ -21,8 +21,8 @@ NAME = L('Title')
 # make sure to replace artwork with what you want
 # these filenames reference the example files in
 # the Contents/Resources/ folder in the bundle
-ART	 = 'art.jpg'
-APP_ICON = 'icon.png'
+ART	 = 'art-default.jpg'
+APP_ICON = 'icon-default.png'
 
 PREFS_ICON = 'icon-prefs.png'
 SEARCH_ICON='icon-search.png'
