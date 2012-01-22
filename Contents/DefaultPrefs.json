@@ -1,24 +1,2 @@
 [
-  {
-        "id": "username",
-        "type": "text",
-        "label": "Username",
-        "default": ""
-    },
-    {
-        "id": "password",
-        "type": "text",
-        "label": "Password",
-        "default": "",
-        "option": "hidden"
-    },
-    {
-        "id": "delay",
-        "type": "enum",
-        "label": "Contdown delay to use if not found on page (secs)",
-        "default": "0",
-        "values": ["0","1","2","3","4","5","7","10","15","20","25","30","40","50","60","70","80","90","100" ],
-        "option": ""
-    }
-
 ]
