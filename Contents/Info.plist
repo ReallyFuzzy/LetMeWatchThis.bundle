@@ -24,7 +24,7 @@
 	<string>1.0</string>
 	
 	<key>PlexClientPlatforms</key>
-	<string>MacOSX, Windows</string>
+	<string>MacOSX,Windows,iOS</string>
 	
 	<key>PlexMediaContainer</key>
 	<array>
@@ -42,14 +42,24 @@
 	
 	<key>PlexPluginConsoleLogging</key>
 	<string>0</string>
+
+	<key>PlexMediaContainer</key>
+	<array>
+		<string>MP4</string>
+		<string>FLV</string>
+	</array>
 	
-	<key>PlexClientCapabilities</key>
-	<dict>
-		<key>protocols</key>
-		<array>
-			<string>webkit</string>
-		</array>
-	</dict>
+	<key>PlexAudioCodec</key>
+	<array>
+		<string>AAC</string>
+		<string>MP3</string>
+	</array>
+	
+	<key>PlexVideoCodec</key>
+	<array>
+		<string>H.264</string>
+		<string>H.263</string>
+	</array>
 	
 </dict>
 </plist>
