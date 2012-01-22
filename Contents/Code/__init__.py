@@ -136,7 +136,7 @@ def VideoMainMenu():
 
 def TypeMenu(sender, type = None, genre = None):
 
-	type_desc = "Movies" 
+	type_desc = "Movies"
 	if (type == "tv"):
 		type_desc = "TV Shows"
 	
@@ -146,7 +146,74 @@ def TypeMenu(sender, type = None, genre = None):
 
 	dir = MediaContainer(noCache=True,title1=sender.title2, title2=mcTitle2, viewGroup="InfoList")
 	
-	ShowMoviesAndTV(mc=dir, type=type, genre=genre)
+	dir.Append(
+		Function(
+			DirectoryItem(
+				ItemsMenu,
+				"Popular",
+				subtitle="",
+				summary="List of most popular " + type_desc,
+				thumb=S("Popular.png"),
+				art=R(ART)
+			),
+			type=type,
+			genre=genre,
+			sort="views",
+			section_name="Popular",
+		)
+	)
+
+	dir.Append(
+		Function(
+			DirectoryItem(
+				ItemsMenu,
+				"Highly Rated",
+				subtitle="",
+				summary="List of highly rated " + type_desc,
+				thumb=S("Favorite.png"),
+				art=R(ART)
+			),
+			type=type,
+			genre=genre,
+			sort="ratings",
+			section_name="Highly Rated",
+		)
+	)
+	
+	dir.Append(
+		Function(
+			DirectoryItem(
+				ItemsMenu,
+				"Recently Added",
+				subtitle="",
+				summary="List of recently added " + type_desc,
+				thumb=S("History.png"),
+				art=R(ART)
+			),
+			type=type,
+			genre=genre,
+			sort='date',
+			section_name="Recently Added",
+		)
+	)
+		
+	dir.Append(
+		Function(
+			DirectoryItem(
+				ItemsMenu,
+				"Latest Releases",
+				subtitle="",
+				summary="List of latest releases",
+				thumb=S("Recent.png"),
+				art=R(ART)
+			),
+			type=type,
+			genre=genre,
+			sort='release',
+			section_name="Latest Releases",
+		)
+	)
+	
 	
 	if genre is None:
 			
@@ -239,7 +306,7 @@ def GenreMenu(sender, type=None):
 	
 		icon = R(GENRE_BASE + "-" + genre.lower() + ".png")
 		if icon is None:
-			Log("Couldn't find icon for genre: " + genre.lower())
+			("Couldn't find icon for genre: " + genre.lower())
 			icon = R(GENRE_ICON)
 			
 		dir.Append(
@@ -259,85 +326,6 @@ def GenreMenu(sender, type=None):
 		
 	return dir
 
-####################################################################################################
-
-def ShowMoviesAndTV(mc=None,type=None,genre=None):
-	
-	func_name=ItemsMenu
-	summaryItem = "movies"
-	
-	if (type == "tv"):
-		summaryItem = "shows"
-
-	mc.Append(
-		Function(
-			DirectoryItem(
-				func_name,
-				"Popular",
-				subtitle="",
-				summary="List of most popular " + summaryItem,
-				thumb=S("Popular.png"),
-				art=R(ART)
-			),
-			type=type,
-			genre=genre,
-			sort="views",
-			section_name="Popular",
-		)
-	)
-
-	mc.Append(
-		Function(
-			DirectoryItem(
-				func_name,
-				"Highly Rated",
-				subtitle="",
-				summary="List of highly rated " + summaryItem,
-				thumb=S("Favorite.png"),
-				art=R(ART)
-			),
-			type=type,
-			genre=genre,
-			sort="ratings",
-			section_name="Highly Rated",
-		)
-	)
-	
-	mc.Append(
-		Function(
-			DirectoryItem(
-				func_name,
-				"Recently Added",
-				subtitle="",
-				summary="List of recently added " + summaryItem,
-				thumb=S("History.png"),
-				art=R(ART)
-			),
-			type=type,
-			genre=genre,
-			sort='date',
-			section_name="Recently Added",
-		)
-	)
-		
-	mc.Append(
-		Function(
-			DirectoryItem(
-				func_name,
-				"Latest Releases",
-				subtitle="",
-				summary="List of latest releases",
-				thumb=S("Recent.png"),
-				art=R(ART)
-			),
-			type=type,
-			genre=genre,
-			sort='release',
-			section_name="Latest Releases",
-		)
-	)
-	
-	return mc
 
 ####################################################################################################
 
