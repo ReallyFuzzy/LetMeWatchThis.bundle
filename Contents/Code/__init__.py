@@ -96,13 +96,13 @@ def VideoMainMenu():
 		Function(
 			DirectoryItem(
 				TypeMenu,
-				"Movies",
-				subtitle="Movies",
-				summary="Watch High Quality Movie in SD and HD formats. Your one stop shop for DVD and BluRay releases.",
-				thumb=R(MOVIE_ICON),
-				art=R(ART)
+				L('MoviesTitle'),
+				subtitle = L('MoviesSubtitle'),
+				summary= L('MoviesSummary'),
+				thumb = R(MOVIE_ICON),
+				art = R(ART)
 			),
-			type="movies",
+			type = "movies",
 		)
 	)
 
@@ -110,9 +110,9 @@ def VideoMainMenu():
 		Function(
 			DirectoryItem(
 				TypeMenu,
-				"TV Shows",
-				subtitle="TV Shows & Episodes",
-				summary="Collection of TV Shows and Episodes",
+				L("TVTitle"),
+				subtitle=L("TVSubtitle"),
+				summary=L("TVSummary"),
 				thumb=R(TV_ICON),
 				art=R(ART)
 			),
@@ -122,9 +122,9 @@ def VideoMainMenu():
 	
 	dir.Append(
 		PrefsItem(
-			title="Preferences",
-			subtile="Set your Megaupload Credentials here",
-			summary="If you have an account at Megaupload, use this feature to store the credentials",
+			title=L("PrefsTitle"),
+			subtile=L("PrefsSubtitle"),
+			summary=L("PrefsSummary"),
 			thumb=R(PREFS_ICON)
 		)
 	)
@@ -378,7 +378,7 @@ def ItemsMenu(sender,type=None,genre=None,sort=None,alpha=None,section_name="", 
 					summary= "",
 					thumb= item.thumb,
 					art="",
-					ratings= item.rating
+					rating = item.rating
 				),
 				mediainfo = item,
 			)
@@ -522,7 +522,12 @@ def SearchResultsMenu(sender, query, type):
 
 def GetItemForSource(mediainfo, item):
 
-	summary = "" + "Provider: " + item['provider_name'] + "\n" + "Quality: " + item['quality'] + "\n" + "Views:" + str(item['views'])
+	summary = (
+		"Provider: " + item['provider_name'] + "\n" + 
+		"Quality: " + item['quality'] + "\n" + 
+		"Views: " + str(item['views']) + "\n" +
+		"Provider Rating: " + str(item['rating']) + "/100"
+	)
 		
 	if (
 		item['provider_name'] == 'putlocker.com' or	
@@ -530,13 +535,13 @@ def GetItemForSource(mediainfo, item):
 	):
 	
 		return Function(
-				WebVideoItem(
+				VideoItem(
 					PlayVideoPutLocker,
 					title = item['name'],
 					subtitle = mediainfo.title,
-					summary= summary,
+					summary = summary,
 					thumb= mediainfo.thumb,
-					art=""
+					rating = mediainfo.rating,
 				),
 				mediainfo = mediainfo,
 				url = item['url'],
@@ -551,7 +556,7 @@ def GetItemForSource(mediainfo, item):
 					subtitle = mediainfo.title,
 					summary= summary,
 					thumb= mediainfo.thumb,
-					art=""
+					rating = mediainfo.rating,
 				),
 				mediainfo = mediainfo,
 				url = item['url'],
@@ -571,7 +576,7 @@ def PlayVideoNotSupported(sender, mediainfo, url):
 def PlayVideoPutLocker(sender, mediainfo, url):
 
 	# Read in hash from form.
-	# Log('Requesting ' + LMWT_URL + url)
+	Log('Requesting ' + LMWT_URL + url)
 	request = urllib2.Request(LMWT_URL + url)
 	request.add_header('User-agent', HTTP.Headers['User-agent'])
 	response = urllib2.urlopen(request)
@@ -647,7 +652,9 @@ def GetSources(url):
 		
 		# Extract out source rating.
 		rating_style = item.find('div', { 'class': 'movie_ratings' }).find('li', { 'class': 'current-rating' })['style']
-		source['rating'] = re.search('(\d*)px', rating_style).group(1)
+		rating = re.search('([\d\.]*)px', rating_style).group(1)
+		if (rating is not None and rating <> ""):
+			source['rating'] = int(float(rating))
 		
 		# Extract out source rating vote numbers.
 		rating_count = item.find('div', { 'class' : re.compile('voted') }).string
@@ -732,7 +739,10 @@ def GetItems(type, genre = None, sort = None, alpha = None, pages = 5, start_pag
 			
 			# Extract out rating
 			rating_style = item.find('li')['style']
-			res.rating = re.search("width:\s(\d)*px;", rating_style).group(1);
+			rating = re.search("width:\s([\d\.]*)px;", rating_style).group(1);
+			
+			if (rating is not None and rating <> ""):
+				res.rating = int(int(rating) / 10)
 			
 			# Add to item list.
 			#Log("Adding item: " + str(res))
@@ -828,5 +838,20 @@ class MediaInfo(object):
 		self.summary = summary
 		self.rating = rating
 		self.dt = dt
+
+		
+	def __str__(self):
+	
+		return (
+			"{ " +
+			"id: " + str(self.id) + ", " +
+			"title: " + str(self.title) + ", " +
+			"year: " + str(self.year) + ", " +
+			"background:" + str(self.background) + ", " +
+			"poster: " + str(self.poster) + ", " +
+			"summary: " + str(self.summary) + ", " +
+			"rating:" + str(self.rating) + ", " +
+			"}"
+		)
 
 cerealizer.register(MediaInfo)

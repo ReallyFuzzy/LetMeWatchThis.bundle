@@ -1,3 +1,18 @@
 {
     "Title": "Let Me Watch This",
+ 
+ 	//================ Main Menu ===============
+    "MoviesTitle":"Movies",
+    "MoviesSubtitle":"Movies",
+    "MoviesSummary":"Watch High Quality Movies. Your one stop shop for DVD and BluRay releases.",
+    
+    "TVTitle":"TV Shows",
+    "TVSubtitle":"TV Shows & Episodes",
+    "TVSummary":"Collection of TV Shows and Episodes",
+    
+    "PrefsTitle":"Preferences",
+    "PrefsSubtitle":"Set your preferences here",
+	"PrefsSummary":"Set your preferences here",
+
+    
 }
