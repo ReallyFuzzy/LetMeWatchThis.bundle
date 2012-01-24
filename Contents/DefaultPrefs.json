@@ -1,2 +1,8 @@
 [
+    {
+        "id": "versiontracking",
+        "type": "bool",
+        "label": "Help measure interest in this plugin",
+        "default": "true"
+    }
 ]

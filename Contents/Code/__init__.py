@@ -18,6 +18,11 @@ from htmlentitydefs import name2codepoint as n2cp
 VIDEO_PREFIX = "/video/lmwt"
 NAME = L('Title')
 
+VERSION = "1.0"
+VERSION_URLS = {
+	"1.0" : "http://bit.ly/ypSj0G"
+}
+
 # make sure to replace artwork with what you want
 # these filenames reference the example files in
 # the Contents/Resources/ folder in the bundle
@@ -76,6 +81,8 @@ def Start():
 	#HTTP.Headers['TE'] = 'trailers'
 	HTTP.Headers['Connection'] = 'keep-alive'
 
+	if (Prefs['versiontracking'] == True):
+		res = HTTP.Request(VERSION_URLS[VERSION], cacheTime = 0, headers = { 'User-agent': '-' })
 
 ####################################################################################################
 # see:
@@ -227,23 +234,26 @@ def TypeMenu(sender, type = None, genre = None):
 					thumb=R(GENRE_ICON),
 					art=R(ART),
 				),
-				type=type,
+				type = type,
 			)
 		)
 		
-		dir.Append(
-			Function(
-				DirectoryItem(
-					AZListMenu,
-					"A-Z List",
-					subtitle="Complete list of " + type_desc,
-					summary="Watch High Quality " + type_desc,
-					thumb=R(AZ_ICON),
-					art=R(ART)
-				),
-				type=type,
-			)
+	dir.Append(
+		Function(
+			DirectoryItem(
+				AZListMenu,
+				"A-Z List",
+				subtitle="Complete list of " + type_desc,
+				summary="Watch High Quality " + type_desc,
+				thumb=R(AZ_ICON),
+				art=R(ART)
+			),
+			type=type,
+			genre = genre,
 		)
+	)
+		
+	if genre is None:
 		
 		dir.Append(
 			Function(
