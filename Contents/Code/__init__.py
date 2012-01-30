@@ -803,7 +803,7 @@ def GetSearchResults(query=None,type=None,):
 	if (type == "tv"):
 		section = "2"
 	
-	url = LMWT_SEARCH_URL + "?search_section=" + section + "&search_keywords=" + query + "&key=" + key
+	url = LMWT_SEARCH_URL + "?search_section=" + section + "&search_keywords=" + urllib.quote_plus(query) + "&key=" + key
 	soup = BeautifulSoup(HTTP.Request(url,cacheTime=0).content)
 	#Log(soup)
 	
