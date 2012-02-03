@@ -80,9 +80,14 @@ def Start():
 	HTTP.Headers['Accept-Encoding'] = '*gzip, deflate'
 	#HTTP.Headers['TE'] = 'trailers'
 	HTTP.Headers['Connection'] = 'keep-alive'
-
+	
 	if (Prefs['versiontracking'] == True):
-		res = HTTP.Request(VERSION_URLS[VERSION], cacheTime = 0, headers = { 'User-agent': '-' })
+		request = urllib2.Request(VERSION_URLS[VERSION])
+		request.add_header('User-agent', '-')
+		try:
+			response = urllib2.urlopen(request)
+		except:
+			pass
 
 ####################################################################################################
 # see:
