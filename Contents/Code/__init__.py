@@ -18,8 +18,9 @@ from htmlentitydefs import name2codepoint as n2cp
 VIDEO_PREFIX = "/video/lmwt"
 NAME = L('Title')
 
-VERSION = "1.0"
+VERSION = "1.1"
 VERSION_URLS = {
+	"1.1" : "http://bit.ly/Acjmo5"
 	"1.0" : "http://bit.ly/ypSj0G"
 }
 
