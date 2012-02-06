@@ -81,6 +81,8 @@ def Start():
 	#HTTP.Headers['TE'] = 'trailers'
 	HTTP.Headers['Connection'] = 'keep-alive'
 	
+	Network.Timeout = 40
+	
 	if (Prefs['versiontracking'] == True):
 		request = urllib2.Request(VERSION_URLS[VERSION])
 		request.add_header('User-agent', '-')
@@ -530,99 +532,8 @@ def SearchResultsMenu(sender, query, type):
 			"No results found for your query \"" + query + "\""
 		)
 
-
-
-
 ####################################################################################################
-
-def GetItemForSource(mediainfo, item):
-
-	summary = (
-		"Provider: " + item['provider_name'] + "\n" + 
-		"Quality: " + item['quality'] + "\n" + 
-		"Views: " + str(item['views']) + "\n" +
-		"Provider Rating: " + str(item['rating']) + "/100"
-	)
-		
-	if (
-		item['provider_name'] == 'putlocker.com' or	
-		item['provider_name'] == 'sockshare.com'	
-	):
-	
-		return Function(
-				VideoItem(
-					PlayVideoPutLocker,
-					title = item['name'],
-					subtitle = mediainfo.title,
-					summary = summary,
-					thumb= mediainfo.thumb,
-					rating = mediainfo.rating,
-				),
-				mediainfo = mediainfo,
-				url = item['url'],
-			)
-			
-	else:
-	
-		return Function(
-				DirectoryItem(
-					PlayVideoNotSupported,
-					title = item['name'] + " (Not currently playable)",
-					subtitle = mediainfo.title,
-					summary= summary,
-					thumb= mediainfo.thumb,
-					rating = mediainfo.rating,
-				),
-				mediainfo = mediainfo,
-				url = item['url'],
-			)
-			
-####################################################################################################
-
-def PlayVideoNotSupported(sender, mediainfo, url):
-
-	return ObjectContainer(
-		header='Provider not currently supported...',
-		message=''
-	)
-
-####################################################################################################
-
-def PlayVideoPutLocker(sender, mediainfo, url):
-
-	# Read in hash from form.
-	Log('Requesting ' + LMWT_URL + url)
-	request = urllib2.Request(LMWT_URL + url)
-	request.add_header('User-agent', HTTP.Headers['User-agent'])
-	response = urllib2.urlopen(request)
-	
-	putlocker_url = response.geturl()
-	# Log(putlocker_url)
-	
-	soup = BeautifulSoup(response.read())
-	params = {}
-	hash =  soup.find('input', {'name' : 'hash' })['value']
-	# Log(hash)
-	params['hash'] = hash
-	params['confirm'] = "Continue as Free User"
-	
-	# Log(params)
-	
-	content = HTTP.Request(putlocker_url,params).content
-	playlist = re.search("playlist: \'(.*?)\'", content).group(1)
-	# Log(playlist)
-	
-	putlocker_host = urlparse.urlparse(putlocker_url).netloc
-	
-	final = HTTP.Request("http://" + putlocker_host + playlist).content
-	# Log(final)
-	
-	finalurl = re.search("<media:content url=\"(.*?)\"", final).group(1)
-	# Log(finalurl)
-
-	return Redirect(finalurl)
-	
-
+# PAGE PARSING
 ####################################################################################################
 
 def GetSources(url):
@@ -793,10 +704,7 @@ def GetURL(type, genre = None, sort = None, page_num = None, alpha = None):
 	
 	
 ####################################################################################################
-# Part of the "search" example 
-# query will contain the string that the user entered
-# see also:
-#	http://dev.plexapp.com/docs/Objects.html#InputDirectoryItem
+
 def GetSearchResults(query=None,type=None,):
 	
 	items = []
@@ -837,8 +745,155 @@ def GetSearchResults(query=None,type=None,):
 	
 	# Log(items)
 	return items
+
 	
+####################################################################################################
+# PROVIDER SPECIFIC CODE
+####################################################################################################
+
+def GetItemForSource(mediainfo, item):
+
+	summary = (
+		"Provider: " + item['provider_name'] + "\n" + 
+		"Quality: " + item['quality'] + "\n" + 
+		"Views: " + str(item['views']) + "\n" +
+		"Provider Rating: " + str(item['rating']) + "/100"
+	)
+		
+	if (
+		item['provider_name'] == 'putlocker.com' or	
+		item['provider_name'] == 'sockshare.com'	
+	):
 	
+		return Function(
+				VideoItem(
+					PlayVideoPutLocker,
+					title = item['name'],
+					subtitle = mediainfo.title,
+					summary = summary,
+					thumb= mediainfo.thumb,
+					rating = mediainfo.rating,
+				),
+				mediainfo = mediainfo,
+				url = item['url'],
+			)
+			
+	elif (item['provider_name'] == 'movpod.net'):
+	
+		return Function(
+				VideoItem(
+					PlayVideoMovPod,
+					title = item['name'],
+					subtitle = mediainfo.title,
+					summary = summary,
+					thumb= mediainfo.thumb,
+					rating = mediainfo.rating,
+				),
+				mediainfo = mediainfo,
+				url = item['url'],
+			)
+			
+	else:
+	
+		return Function(
+				DirectoryItem(
+					PlayVideoNotSupported,
+					title = item['name'] + " (Not currently playable)",
+					subtitle = mediainfo.title,
+					summary= summary,
+					thumb= mediainfo.thumb,
+					rating = mediainfo.rating,
+				),
+				mediainfo = mediainfo,
+				url = item['url'],
+			)
+			
+####################################################################################################
+
+def PlayVideoNotSupported(sender, mediainfo, url):
+
+	return ObjectContainer(
+		header='Provider not currently supported...',
+		message=''
+	)
+
+####################################################################################################
+
+def PlayVideoMovPod(sender, mediainfo, url):
+
+	# Read in MovPod Loc.
+	soup = BeautifulSoup(HTTP.Request(LMWT_URL + url, cacheTime=0).content)
+	movpod_url = soup.noframes.string
+	#Log(movpod_url)
+	
+	# Request movpod page.
+	#Log('Requesting ' + movpod_url)
+	request = urllib2.Request(movpod_url)
+	request.add_header('User-agent', HTTP.Headers['User-agent'])
+	response = urllib2.urlopen(request)
+	
+	# Collect final url and read in MovPod page.
+	movpod_url = response.geturl()
+	#Log(movpod_url)
+	soup = BeautifulSoup(response.read())
+	
+	# Extract out these form elements...
+	formElems = ['op', 'id', 'fname', 'method_free', 'referer', 'usr_login']
+	params = {}
+	
+	for formElem in formElems:
+		formElemVal =  soup.find('input', {'name' : formElem })['value']
+		params[formElem] = formElemVal
+			
+	#Log(params)
+	
+	headers = { 'Referer': movpod_url }
+	content = HTTP.Request(movpod_url,values=params,headers=headers).content
+	#Log(content)
+	
+	file = re.search('file:\"(.*?)\"', content)
+	#Log(file.group(1))
+
+	#Log(Network.Timeout)
+	return Redirect(file.group(1))
+
+####################################################################################################
+
+def PlayVideoPutLocker(sender, mediainfo, url):
+
+	# Read in hash from form.
+	#Log('Requesting ' + LMWT_URL + url)
+	request = urllib2.Request(LMWT_URL + url)
+	request.add_header('User-agent', HTTP.Headers['User-agent'])
+	response = urllib2.urlopen(request)
+	
+	putlocker_url = response.geturl()
+	# Log(putlocker_url)
+	
+	soup = BeautifulSoup(response.read())
+	params = {}
+	hash =  soup.find('input', {'name' : 'hash' })['value']
+	# Log(hash)
+	params['hash'] = hash
+	params['confirm'] = "Continue as Free User"
+	
+	# Log(params)
+	
+	content = HTTP.Request(putlocker_url,params).content
+	playlist = re.search("playlist: \'(.*?)\'", content).group(1)
+	# Log(playlist)
+	
+	putlocker_host = urlparse.urlparse(putlocker_url).netloc
+	
+	final = HTTP.Request("http://" + putlocker_host + playlist).content
+	# Log(final)
+	
+	finalurl = re.search("<media:content url=\"(.*?)\"", final).group(1)
+	# Log(finalurl)
+	
+	return Redirect(finalurl + "?start=0")
+	
+
 ####################################################################################################
 
 class MediaInfo(object):
