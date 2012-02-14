@@ -2,6 +2,7 @@ import re
 import time
 import datetime
 import random
+import string
 import urllib2
 import urllib
 import urlparse
@@ -18,8 +19,9 @@ from htmlentitydefs import name2codepoint as n2cp
 VIDEO_PREFIX = "/video/lmwt"
 NAME = L('Title')
 
-VERSION = "1.1"
+VERSION = "1.2"
 VERSION_URLS = {
+	"1.2" : "http://bit.ly/wCczFy",
 	"1.1" : "http://bit.ly/Acjmo5",
 	"1.0" : "http://bit.ly/ypSj0G"
 }
@@ -487,7 +489,7 @@ def SourcesMenu(sender, mediainfo = None, url = None, item_name = None):
 	if (item_name is None):
 		item_name = mediainfo.title
 	
-	mc = MediaContainer(viewGroup = "ListInfo", title1=sender.title2, title2= item_name)
+	mc = ObjectContainer(view_group = "InfoList", title1=sender.title2, title2= item_name)
 	
 	for item in GetSources(url):
 	
@@ -495,7 +497,7 @@ def SourcesMenu(sender, mediainfo = None, url = None, item_name = None):
 			continue
 				
 		# Log(item)
-		mc.Append(GetItemForSource(mediainfo = mediainfo, item = item))
+		mc.add(GetItemForSource(mediainfo = mediainfo, item = item))
 		
 	return mc
 	
@@ -760,58 +762,100 @@ def GetItemForSource(mediainfo, item):
 		"Views: " + str(item['views']) + "\n" +
 		"Provider Rating: " + str(item['rating']) + "/100"
 	)
-		
+	
 	if (
 		item['provider_name'] == 'putlocker.com' or	
 		item['provider_name'] == 'sockshare.com'	
 	):
 	
-		return Function(
-				VideoItem(
-					PlayVideoPutLocker,
-					title = item['name'],
-					subtitle = mediainfo.title,
-					summary = summary,
-					thumb= mediainfo.thumb,
-					rating = mediainfo.rating,
-				),
-				mediainfo = mediainfo,
-				url = item['url'],
-			)
+		return VideoClipObject(
+			key = Callback(PlayVideoPutLocker, mediainfo = mediainfo, url = item['url']),
+			title = item['name'],
+			rating_key = 'LMWT/' + mediainfo.id,
+			summary = summary,
+			thumb= mediainfo.thumb,
+			rating = float(mediainfo.rating),
+		)
 			
-	elif (item['provider_name'] == 'movpod.net'):
+	elif (
+		item['provider_name'] == 'movpod.net' or
+		item['provider_name'] == 'movpod.in' or
+		item['provider_name'] == 'daclips.com' or
+		item['provider_name'] == 'daclips.in'
+	):
 	
-		return Function(
-				VideoItem(
-					PlayVideoMovPod,
-					title = item['name'],
-					subtitle = mediainfo.title,
-					summary = summary,
-					thumb= mediainfo.thumb,
-					rating = mediainfo.rating,
-				),
-				mediainfo = mediainfo,
-				url = item['url'],
-			)
+		return VideoClipObject(
+			key = Callback(PlayVideoMovPod, mediainfo = mediainfo, url = item['url']),
+			rating_key = 'LMWT/' + mediainfo.id,
+			title = item['name'],
+			summary = summary,
+			thumb = mediainfo.thumb,
+			rating = float(mediainfo.rating),
+		)
+		
+	elif (item['provider_name'] == 'zalaa.com'):
+	
+		return MovieObject(
+			key = Callback(PlayVideoZalaa, mediainfo = mediainfo, url = item['url']),
+			rating_key = 'LMWT/' + mediainfo.id,
+			title = item['name'],
+			summary = summary,
+			thumb = mediainfo.thumb,
+			rating = float(mediainfo.rating),
+		)
+		
+	elif (item['provider_name'] == 'youtube.com'):
+	
+		# Get final URL now so we can simply re-use the existing YouTube service.
+		# Note that even though this means "pre-loading" a source with all the
+		# associated requests to the LMWT servers, this is not as bad as it seems,
+		# as when YouTube is a source, it's usually the only source.
+		#Log('Requesting ' + item['url'])
+		request = urllib2.Request(LMWT_URL + item['url'])
+		request.add_header('User-agent', HTTP.Headers['User-agent'])
+		response = urllib2.urlopen(request)
+	
+		# Collect final url.
+		final_url = response.geturl()
+		#Log(final_url)
+	
+		return VideoClipObject(
+			title = item['name'],
+			summary = summary,
+			thumb= mediainfo.thumb,
+			rating = float(mediainfo.rating),
+			url = final_url
+		)
 			
+	elif (
+		# Temporarily disable FileBox as they don't seem to be able to return files
+		# within a reasonable time delay which causes Plex to time out.
+		#item['provider_name'] == 'filebox.com' or
+		item['provider_name'] == 'ufliq.com'
+	):
+	
+		return VideoClipObject(
+			key = Callback(PlayVideoFileBox, mediainfo = mediainfo, url = item['url']),
+			rating_key = 'LMWT/' + mediainfo.id,
+			title = item['name'],
+			summary = summary,
+			thumb= mediainfo.thumb,
+			rating = float(mediainfo.rating),
+		)
+						
 	else:
 	
-		return Function(
-				DirectoryItem(
-					PlayVideoNotSupported,
-					title = item['name'] + " (Not currently playable)",
-					subtitle = mediainfo.title,
-					summary= summary,
-					thumb= mediainfo.thumb,
-					rating = mediainfo.rating,
-				),
-				mediainfo = mediainfo,
-				url = item['url'],
-			)
-			
+		return DirectoryObject(
+			key = Callback(PlayVideoNotSupported, mediainfo = mediainfo, url = item['url']),
+			title = item['name'] + " (Not currently playable)",
+			summary= summary,
+			thumb= mediainfo.thumb,
+		)
+		
+						
 ####################################################################################################
 
-def PlayVideoNotSupported(sender, mediainfo, url):
+def PlayVideoNotSupported(mediainfo, url):
 
 	return ObjectContainer(
 		header='Provider not currently supported...',
@@ -820,7 +864,87 @@ def PlayVideoNotSupported(sender, mediainfo, url):
 
 ####################################################################################################
 
-def PlayVideoMovPod(sender, mediainfo, url):
+def PlayVideoZalaa(mediainfo, url):
+
+	# Read in Loc.
+	soup = BeautifulSoup(HTTP.Request(LMWT_URL + url, cacheTime=0).content)
+	provider_url = soup.noframes.string
+	#Log(provider_url)
+	
+	# Request provider page.
+	#Log('Requesting ' + provider_url)
+	request = urllib2.Request(provider_url)
+	request.add_header('User-agent', HTTP.Headers['User-agent'])
+	response = urllib2.urlopen(request)
+	
+	# Collect final url (in case of 302 or the like) and read in page.
+	provider_url = response.geturl()
+	#Log(provider_url)
+	
+	# Collect filename. Will need that for later.
+	file_name = urlparse.urlparse(provider_url).path.split("/")[1]
+	#Log(file_name)
+	
+	soup = BeautifulSoup(response.read())
+	
+	# Extract out these form elements from the provider page...
+	formElems = ['op', 'id', 'fname', 'method_free', 'referer', 'usr_login', 'ipcount_val']
+	params = {}
+	
+	for formElem in formElems:
+		formElemVal =  soup.find('input', {'name' : formElem })['value']
+		params[formElem] = formElemVal
+			
+	#Log(params)
+	
+	# Submit the form. This wil give us a page with the flash player.
+	headers = { 'Referer': provider_url }
+	content = HTTP.Request(provider_url, cacheTime=0, values=params, headers=headers).content
+	soup = BeautifulSoup(content)
+
+	final_url = None
+	
+	# See how we're going to retrieve the file name....
+	if (soup.find('span', { 'id' : 'flvplayerid' })) is None:
+		
+		script = soup.find('div', { 'id': 'player_code' }).script.string
+		#Log(script)
+		
+		# Look for substitution values.
+		elems = re.search("\d{2},'([^']*)'.split", script).group(1).split('|')
+		#Log(elems)
+		
+		# Look for url to substitute values into.
+		url = re.search("([0-9a-z]://[0-9a-z]\.[0-9a-z]\.[0-9a-z]\:[0-9a-z]/[0-9a-z]/[0-9a-z]/[0-9a-z.\-_ ()]*)", script)
+		#Log(url.group(1))
+		
+		# Create dict to map url sub keys to sub values.
+		alphadict = dict()
+		for cnt in range(0, len(string.digits + string.ascii_lowercase)):
+			alphadict[(string.digits + string.ascii_lowercase)[cnt]] = cnt
+	
+		def SubElem(matchObj):
+			val = elems[alphadict[matchObj.group(0)]]
+			if (val == ""):
+				val = matchObj.group(0)
+			return val
+
+		# Sub values into url.
+		final_url = re.sub("[0-9a-z]", SubElem, url.group(1)) 
+		
+	else:
+		# Get file URL.
+		#Log("Using FLV Player")
+		file = re.search("s1.addVariable\('file','([^']*)'\);", content)	
+		final_url = file.group(1)
+	
+	# And done...
+	Log(final_url)
+	return Redirect(final_url)
+
+####################################################################################################
+
+def PlayVideoMovPod(mediainfo, url):
 
 	# Read in MovPod Loc.
 	soup = BeautifulSoup(HTTP.Request(LMWT_URL + url, cacheTime=0).content)
@@ -853,14 +977,14 @@ def PlayVideoMovPod(sender, mediainfo, url):
 	#Log(content)
 	
 	file = re.search('file:\"(.*?)\"', content)
-	#Log(file.group(1))
+	final_url = file.group(1)
 
-	#Log(Network.Timeout)
-	return Redirect(file.group(1))
+	Log(final_url)
+	return Redirect(final_url)
 
 ####################################################################################################
 
-def PlayVideoPutLocker(sender, mediainfo, url):
+def PlayVideoPutLocker(mediainfo, url):
 
 	# Read in hash from form.
 	#Log('Requesting ' + LMWT_URL + url)
@@ -889,12 +1013,52 @@ def PlayVideoPutLocker(sender, mediainfo, url):
 	final = HTTP.Request("http://" + putlocker_host + playlist).content
 	# Log(final)
 	
-	finalurl = re.search("<media:content url=\"(.*?)\"", final).group(1)
-	# Log(finalurl)
+	final_url = re.search("<media:content url=\"(.*?)\"", final).group(1)
 	
-	return Redirect(finalurl + "?start=0")
-	
+	Log(final_url)
+	return Redirect(final_url + "?start=0")
 
+################################################################################################
+
+def PlayVideoFileBox(mediainfo, url):
+
+	# Read in file Loc.
+	soup = BeautifulSoup(HTTP.Request(LMWT_URL + url, cacheTime=0).content)
+	provider_url = soup.noframes.string
+	#Log(provider_url)
+	
+	#Log('Requesting ' + provider_url)
+	request = urllib2.Request(provider_url)
+	request.add_header('User-agent', HTTP.Headers['User-agent'])
+	response = urllib2.urlopen(request)
+	
+	# Collect final url and read in page.
+	provider_url = response.geturl()
+	#Log(provider_url)
+	soup = BeautifulSoup(response.read())
+	
+	# Extract out these form elements...
+	formElems = ['op', 'id', 'rand', 'method_free', 'method_premium', 'referer', 'down_direct']
+	params = {}
+	
+	for formElem in formElems:
+		formElemVal =  soup.find('input', {'name' : formElem })['value']
+		params[formElem] = formElemVal
+			
+	#Log(params)
+	
+	time.sleep(5)
+	headers = { 'Referer': provider_url }
+	soup = BeautifulSoup(HTTP.Request(provider_url,values=params,headers=headers).content)
+	#Log(soup)
+	
+	
+	final_url = soup.find('div', { 'class' : 'getpremium_heading4' }).a['href']
+
+	Log(final_url)
+	return Redirect(final_url)
+	
+	
 ####################################################################################################
 
 class MediaInfo(object):
