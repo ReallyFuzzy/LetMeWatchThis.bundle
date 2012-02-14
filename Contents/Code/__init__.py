@@ -915,13 +915,15 @@ def PlayVideoZalaa(mediainfo, url):
 		#Log(elems)
 		
 		# Look for url to substitute values into.
-		url = re.search("([0-9a-z]://[0-9a-z]\.[0-9a-z]\.[0-9a-z]\:[0-9a-z]/[0-9a-z]/[0-9a-z]/[0-9a-z.\-_ ()]*)", script)
+		url = re.search("([0-9a-z]*://[0-9a-z]*\.[0-9a-z]*\.[0-9a-z]*\:[0-9a-z]*/[0-9a-z]*/[0-9a-z]*/[0-9a-z.\-_ ()]*)", script)
 		#Log(url.group(1))
 		
 		# Create dict to map url sub keys to sub values.
 		alphadict = dict()
 		for cnt in range(0, len(string.digits + string.ascii_lowercase)):
 			alphadict[(string.digits + string.ascii_lowercase)[cnt]] = cnt
+		for cnt in range(10,30):
+			alphadict[str(cnt)] = len(alphadict)
 	
 		def SubElem(matchObj):
 			val = elems[alphadict[matchObj.group(0)]]
@@ -930,7 +932,7 @@ def PlayVideoZalaa(mediainfo, url):
 			return val
 
 		# Sub values into url.
-		final_url = re.sub("[0-9a-z]", SubElem, url.group(1)) 
+		final_url = re.sub("[0-9a-z]{1,2}", SubElem, url.group(1)) 
 		
 	else:
 		# Get file URL.
