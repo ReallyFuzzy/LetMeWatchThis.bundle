@@ -3,6 +3,7 @@ import time
 import datetime
 import random
 import string
+import cookielib
 import urllib2
 import urllib
 import urlparse
@@ -988,32 +989,52 @@ def PlayVideoMovPod(mediainfo, url):
 
 def PlayVideoPutLocker(mediainfo, url):
 
-	# Read in hash from form.
+	cj = cookielib.CookieJar()
+	opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cj))
+	
+	# Request LMWT this page which will issue 302 to PutLocker page.
 	#Log('Requesting ' + LMWT_URL + url)
 	request = urllib2.Request(LMWT_URL + url)
 	request.add_header('User-agent', HTTP.Headers['User-agent'])
-	response = urllib2.urlopen(request)
+	response = opener.open(request)
 	
+	# Read in location and content of PutLocker page.
 	putlocker_url = response.geturl()
-	# Log(putlocker_url)
-	
 	soup = BeautifulSoup(response.read())
+	#Log(putlocker_url)
+	#Log(cj)
+	
+	# Read in form info...
 	params = {}
-	hash =  soup.find('input', {'name' : 'hash' })['value']
-	# Log(hash)
-	params['hash'] = hash
+	params['hash'] = soup.find('input', {'name' : 'hash' })['value']
 	params['confirm'] = "Continue as Free User"
+	Log(params)
 	
-	# Log(params)
+	# Submit form by re-requesting the same page.
+	Log('Requesting ' + putlocker_url)
+	request = urllib2.Request(putlocker_url)
+	request.add_header('User-agent', HTTP.Headers['User-agent'])
+	request.add_data(urllib.urlencode(params))
+	response = opener.open(request)
 	
-	content = HTTP.Request(putlocker_url,params).content
+	# Read in data from response.
+	content = response.read()
+	#Log(content)
+	
+	# Look for playlist URL.
 	playlist = re.search("playlist: \'(.*?)\'", content).group(1)
-	# Log(playlist)
+	#Log(playlist)
 	
 	putlocker_host = urlparse.urlparse(putlocker_url).netloc
 	
-	final = HTTP.Request("http://" + putlocker_host + playlist).content
-	# Log(final)
+	# Fetch playlist
+	#Log('Requesting ' + "http://" + putlocker_host + playlist)
+	request = urllib2.Request("http://" + putlocker_host + playlist)
+	request.add_header('User-agent', HTTP.Headers['User-agent'])
+	response = opener.open(request)
+	
+	final = response.read()
+	Log(final)
 	
 	final_url = re.search("<media:content url=\"(.*?)\"", final).group(1)
 	
