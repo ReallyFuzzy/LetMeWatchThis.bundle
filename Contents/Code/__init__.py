@@ -20,12 +20,17 @@ from htmlentitydefs import name2codepoint as n2cp
 VIDEO_PREFIX = "/video/lmwt"
 NAME = L('Title')
 
-VERSION = "1.2"
+VERSION = "12.02.18.1"
 VERSION_URLS = {
+	"12.02.18.1": "http://bit.ly/y3LvHD",
 	"1.2" : "http://bit.ly/wCczFy",
 	"1.1" : "http://bit.ly/Acjmo5",
 	"1.0" : "http://bit.ly/ypSj0G"
 }
+
+LATEST_VERSION_URL = 'http://bit.ly/xoGzzQ'
+LATEST_VERSION = 'LATEST_VERSION'
+LATEST_VERSION_SUMMARY = 'LATEST_VERSION_SUMMARY'
 
 # make sure to replace artwork with what you want
 # these filenames reference the example files in
@@ -85,7 +90,7 @@ def Start():
 	#HTTP.Headers['TE'] = 'trailers'
 	HTTP.Headers['Connection'] = 'keep-alive'
 	
-	Network.Timeout = 40
+	Network.Timeout = 120
 	
 	if (Prefs['versiontracking'] == True):
 		request = urllib2.Request(VERSION_URLS[VERSION])
@@ -146,9 +151,41 @@ def VideoMainMenu():
 			thumb=R(PREFS_ICON)
 		)
 	)
-
+	
+	# Get latest version number of plugin.
+	soup = BeautifulSoup(HTTP.Request(LATEST_VERSION_URL, cacheTime=3600).content)
+	Dict[LATEST_VERSION] = soup.find('div',{'class':'markdown-body'}).p.string
+	
+	if (Dict[LATEST_VERSION] != VERSION):
+	
+		summary = soup.find('div',{'class':'markdown-body'}).pre.code.string
+		summary += "\nClick to be taken to the Unsupported App Store"
+		Dict[LATEST_VERSION_SUMMARY] = summary
+		
+		dir.autoRefresh = 15
+		
+		dir.Append(
+			Function(
+				DirectoryItem(
+					UpdateMenu,
+					title='Update Available',
+					subtitle="Version " + Dict[LATEST_VERSION] + " is now available. You currently have " + VERSION,
+					summary=Dict[LATEST_VERSION_SUMMARY],
+					thumb=None,
+					art=R(ART)
+				),
+			),
+		)
+	
 	return dir
 
+####################################################################################################
+# Menu users seen when they select Update in main menu.
+
+def UpdateMenu(sender):
+
+	return Redirect('/applications/unsupportedappstore')
+	
 ####################################################################################################
 # Menu users seen when they select TV shows in Main menu
 
