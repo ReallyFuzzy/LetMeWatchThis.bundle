@@ -170,7 +170,7 @@ def VideoMainMenu():
 				DirectoryItem(
 					UpdateMenu,
 					title='Update Available',
-					subtitle="Version " + Dict[LATEST_VERSION] + " is now available. You currently have " + VERSION,
+					subtitle="Version " + Dict[LATEST_VERSION] + " is now available. You have " + VERSION,
 					summary=Dict[LATEST_VERSION_SUMMARY],
 					thumb=None,
 					art=R(ART)
@@ -185,7 +185,7 @@ def VideoMainMenu():
 
 def UpdateMenu(sender):
 
-	return Redirect('/applications/unsupportedappstore')
+	return Redirect('/applications/unsupportedappstore/:/function/InstalledMenu?function_args=Y2VyZWFsMQozCmRpY3QKZGljdApGcmFtZXdvcmsub2JqZWN0cy5JdGVtSW5mb1JlY29yZAoxCnIyCnM2CnNlbmRlcjUKczkKSW5zdGFsbGVkczkKaXRlbVRpdGxlczIwClVuU3VwcG9ydGVkIEFwcFN0b3JlczYKdGl0bGUxczQKTm9uZXM2CnRpdGxlMnM3NAovYXBwbGljYXRpb25zL3Vuc3VwcG9ydGVkYXBwc3RvcmUvOi9yZXNvdXJjZXMvYXJ0LWRlZmF1bHQuanBnP3Q9MTMyOTQzNDEyOHMzCmFydHM3NQovYXBwbGljYXRpb25zL3Vuc3VwcG9ydGVkYXBwc3RvcmUvOi9yZXNvdXJjZXMvaWNvbi1kZWZhdWx0LnBuZz90PTEzMjk0MzQxMjhzNQp0aHVtYnIxCnIwCg__')
 	
 ####################################################################################################
 # Menu users seen when they select TV shows in Main menu
