@@ -1,21 +1,12 @@
 import re
-import time
-import datetime
-import random
-import string
-import cookielib
-import urllib2
-import urllib
-import urlparse
-import Queue
-
-from urllib import quote_plus
-
-import copy
 import cerealizer
-from BeautifulSoup import BeautifulSoup
+import urllib
+import urllib2
 
-from htmlentitydefs import name2codepoint as n2cp
+from BeautifulSoup import BeautifulSoup
+from Utils import MediaInfo
+
+cerealizer.register(MediaInfo)
 
 VIDEO_PREFIX = "/video/lmwt"
 NAME = L('Title')
@@ -88,10 +79,7 @@ def Start():
 	HTTP.Headers['User-agent'] = USER_AGENT
 	HTTP.Headers['Accept'] = 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
 	HTTP.Headers['Accept-Encoding'] = '*gzip, deflate'
-	#HTTP.Headers['TE'] = 'trailers'
 	HTTP.Headers['Connection'] = 'keep-alive'
-	
-	Network.Timeout = 120
 	
 	if (Prefs['versiontracking'] == True):
 		request = urllib2.Request(VERSION_URLS[VERSION])
@@ -838,39 +826,3 @@ def PlayVideoNotSupported(mediainfo, url):
 		header='Provider not currently supported...',
 		message=''
 	)
-
-	
-
-####################################################################################################
-# HELPER CLASS
-####################################################################################################
-
-class MediaInfo(object):
-
-	def __init__(self, id = None, title = None, year = None, background = None, poster = None, summary = None, rating = None, dt = None):
-	
-		self.id = id
-		self.title = title
-		self.year = year
-		self.background = background
-		self.poster = poster
-		self.summary = summary
-		self.rating = rating
-		self.dt = dt
-
-		
-	def __str__(self):
-	
-		return (
-			"{ " +
-			"id: " + str(self.id) + ", " +
-			"title: " + str(self.title) + ", " +
-			"year: " + str(self.year) + ", " +
-			"background:" + str(self.background) + ", " +
-			"poster: " + str(self.poster) + ", " +
-			"summary: " + str(self.summary) + ", " +
-			"rating:" + str(self.rating) + ", " +
-			"}"
-		)
-
-cerealizer.register(MediaInfo)
