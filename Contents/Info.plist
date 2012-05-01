@@ -78,7 +78,7 @@
 			<string>com.plexapp.plugins.letmewatchthis.movpod</string>
 			
 			<key>URLPattern</key>
-			<string>http://(www\.)?(movpod|daclips)\.(com|in|net)/[\d\w]{5,}</string>		
+			<string>http://(www\.)?(movpod|daclips|gorillavid)\.(com|in|net)/[\d\w]{5,}</string>		
 		</dict>
 		
 		<key>PutLocker</key>
@@ -87,7 +87,7 @@
 			<string>com.plexapp.plugins.letmewatchthis.putlocker</string>
 			
 			<key>URLPattern</key>
-			<string>http://(www\.)?(putlocker|sockshare)\.com/file/[\d\w]{5,}</string>		
+			<string>http://(www\.)?(putlocker|sockshare)\.com/</string>		
 		</dict>
 		
 		<key>Zalaa</key>

@@ -11,8 +11,9 @@ cerealizer.register(MediaInfo)
 VIDEO_PREFIX = "/video/lmwt"
 NAME = L('Title')
 
-VERSION = "12.04.18.1"
+VERSION = "12.05.01.1"
 VERSION_URLS = {
+	"12.05.01.1": "http://bit.ly/IpYhy9",
 	"12.04.18.1": "http://bit.ly/JajQNI",
 	"12.02.28.1": "http://bit.ly/yzepjl",
 	"12.02.18.1": "http://bit.ly/y3LvHD",
@@ -793,7 +794,7 @@ def GetItemForSource(mediainfo, item):
 	
 	providers_with_service = [
 		'putlocker.com', 'sockshare.com',
-		'movpod.net', 'movpod.in', 'daclips.com', 'daclips.in',
+		'movpod.net', 'movpod.in', 'daclips.com', 'daclips.in', 'gorillavid.com', 'gorillavid.in',
 		'youtube.com',
 		'zalaa.com',
 		'vidbux.com','vidxden.com'
