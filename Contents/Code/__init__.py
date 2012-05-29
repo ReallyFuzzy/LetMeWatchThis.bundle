@@ -2,6 +2,7 @@ import re
 import cerealizer
 import urllib
 import urllib2
+import copy
 
 from BeautifulSoup import BeautifulSoup
 from Utils import MediaInfo
@@ -11,8 +12,9 @@ cerealizer.register(MediaInfo)
 VIDEO_PREFIX = "/video/lmwt"
 NAME = L('Title')
 
-VERSION = "12.05.01.1"
+VERSION = "12.05.28.1"
 VERSION_URLS = {
+	"12.05.28.1": "http://bit.ly/JJvDZO",
 	"12.05.01.1": "http://bit.ly/IpYhy9",
 	"12.04.18.1": "http://bit.ly/JajQNI",
 	"12.02.28.1": "http://bit.ly/yzepjl",
@@ -175,6 +177,10 @@ def VideoMainMenu():
 
 def UpdateMenu(sender):
 
+	# Force an update to the UAS' version info.
+	HTTP.Request("http://" + Request.Headers['Host'] + "/applications/unsupportedappstore/:/function/ApplicationsMainMenu", cacheTime=0)
+	
+	# Go to the UAS.
 	return Redirect('/applications/unsupportedappstore/:/function/InstalledMenu?function_args=Y2VyZWFsMQozCmRpY3QKZGljdApGcmFtZXdvcmsub2JqZWN0cy5JdGVtSW5mb1JlY29yZAoxCnIyCnM2CnNlbmRlcjUKczkKSW5zdGFsbGVkczkKaXRlbVRpdGxlczIwClVuU3VwcG9ydGVkIEFwcFN0b3JlczYKdGl0bGUxczQKTm9uZXM2CnRpdGxlMnM3NAovYXBwbGljYXRpb25zL3Vuc3VwcG9ydGVkYXBwc3RvcmUvOi9yZXNvdXJjZXMvYXJ0LWRlZmF1bHQuanBnP3Q9MTMyOTQzNDEyOHMzCmFydHM3NQovYXBwbGljYXRpb25zL3Vuc3VwcG9ydGVkYXBwc3RvcmUvOi9yZXNvdXJjZXMvaWNvbi1kZWZhdWx0LnBuZz90PTEzMjk0MzQxMjhzNQp0aHVtYnIxCnIwCg__')
 	
 ####################################################################################################
@@ -316,7 +322,7 @@ def TypeMenu(sender, type = None, genre = None):
 def AZListMenu(sender,type=None, genre=None, sort=None, alpha=None):
 
 	mc = MediaContainer( viewGroup = "InfoList" , title1=sender.title2, title2 = "A-Z")
-	azList = ['#1234','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z']
+	azList = ['123','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z']
 	
 	for value in azList:
 		mc.Append(
@@ -632,7 +638,15 @@ def GetSources(url):
 
 def GetTVSeasonShows(url):
 
-	soup = BeautifulSoup(HTTP.Request(LMWT_URL + url).content)
+	# The description meta header for some shows inserts random double quotes in the
+	# content which breaks the parsing of the page. Work around that by simply
+	# removing the head section in which the meta elements are contained.
+	headMassage = [(re.compile('<head>(.*)</head>', re.S), lambda match: '')]
+	soupMassage = copy.copy(BeautifulSoup.MARKUP_MASSAGE)
+	soupMassage.extend(headMassage)	
+	
+	soup = BeautifulSoup(HTTP.Request(LMWT_URL + url).content, markupMassage=soupMassage)
+	
 	shows = []
 	
 	for item in soup.findAll('div', { 'class': 'tv_episode_item' }):
@@ -655,11 +669,18 @@ def GetTVSeasonShows(url):
 ####################################################################################################
 
 def GetTVSeasons(mediainfo):
+
+	# The description meta header for some shows inserts random double quotes in the
+	# content which breaks the parsing of the page. Work around that by simply
+	# removing the head section in which the meta elements are contained.
+	headMassage = [(re.compile('<head>(.*)</head>', re.S), lambda match: '')]
+	soupMassage = copy.copy(BeautifulSoup.MARKUP_MASSAGE)
+	soupMassage.extend(headMassage)	
 	
+	soup = BeautifulSoup(HTTP.Request(LMWT_URL + mediainfo.id).content, markupMassage=soupMassage)
+
 	items = []
-	
-	soup = BeautifulSoup(HTTP.Request(LMWT_URL + mediainfo.id).content)
-	
+
 	for item in soup.find("div", { 'id': 'first' }).findAll('h2'):
 	
 		items.append([str(item.a.string), item.a['href']])
