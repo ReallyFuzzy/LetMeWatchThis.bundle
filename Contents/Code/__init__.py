@@ -580,7 +580,15 @@ def SearchResultsMenu(sender, query, type):
 
 def GetSources(url):
 
-	soup = BeautifulSoup(HTTP.Request(LMWT_URL + url).content)
+	# The description meta header for some shows inserts random double quotes in the
+	# content which breaks the parsing of the page. Work around that by simply
+	# removing the head section in which the meta elements are contained.
+	headMassage = [(re.compile('<head>(.*)</head>', re.S), lambda match: '')]
+	soupMassage = copy.copy(BeautifulSoup.MARKUP_MASSAGE)
+	soupMassage.extend(headMassage)	
+	
+	soup = BeautifulSoup(HTTP.Request(LMWT_URL + url).content, markupMassage=soupMassage)
+
 	sources = []
 	
 	for item in soup.find('div', { 'id': 'first' }).findAll('table', { 'class' : re.compile('movie_version.*') }):
