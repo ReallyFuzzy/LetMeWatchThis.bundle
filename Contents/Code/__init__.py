@@ -3,18 +3,25 @@ import cerealizer
 import urllib
 import urllib2
 import copy
+import sys
+
+from datetime import date, datetime
+from htmlentitydefs import name2codepoint as n2cp
+from urlparse import urlparse
 
 from BeautifulSoup import BeautifulSoup
 from Utils import MediaInfo
+from MetaProviders import DBProvider
 
 cerealizer.register(MediaInfo)
 
 VIDEO_PREFIX = "/video/lmwt"
 NAME = L('Title')
 
-VERSION = "12.07.19.1"
+VERSION = "12.07.25.1"
 VERSION_URLS = {
-	"12.07.19.1": "http://bit.ly/MxCuqr",
+	"12.07.25.0": "http://bit.ly/OZBBRR",
+	"12.07.19.0": "http://bit.ly/MxCuqr",
 	"12.05.28.1": "http://bit.ly/JJvDZO",
 	"12.05.01.1": "http://bit.ly/IpYhy9",
 	"12.04.18.1": "http://bit.ly/JajQNI",
@@ -429,6 +436,7 @@ def ItemsMenu(sender,type=None,genre=None,sort=None,alpha=None,section_name="", 
 	
 	for item in items:
 	
+		#Log(item)
 		mc.Append(
 			Function(
 				DirectoryItem(
@@ -436,7 +444,7 @@ def ItemsMenu(sender,type=None,genre=None,sort=None,alpha=None,section_name="", 
 					item.title,
 					subtitle="",
 					summary= "",
-					thumb= item.thumb,
+					thumb= item.poster,
 					art="",
 					rating = item.rating
 				),
@@ -471,6 +479,7 @@ def TVSeasonMenu(sender, mediainfo = None):
 
 	mc = MediaContainer(viewGroup = "ListInfo", title1=sender.title2, title2= mediainfo.title)
 	
+	#Log(mediainfo)
 	items = GetTVSeasons(mediainfo)
 	
 	for item in items:
@@ -481,7 +490,7 @@ def TVSeasonMenu(sender, mediainfo = None):
 					item[0],
 					subtitle="",
 					summary= "",
-					thumb= mediainfo.thumb,
+					thumb= mediainfo.poster,
 					art="",
 					ratings= mediainfo.rating
 				),
@@ -507,13 +516,14 @@ def TVSeasonShowsMenu(sender, mediainfo = None, season_info = None):
 					item[0],
 					subtitle= mediainfo.title,
 					summary= "",
-					thumb= mediainfo.thumb,
+					thumb= mediainfo.poster,
 					art="",
 					ratings= mediainfo.rating
 				),
 				mediainfo = mediainfo,
 				url = item[1],
-				item_name = item[0]
+				item_name = item[0],
+				
 			)
 		)
 			
@@ -531,14 +541,28 @@ def SourcesMenu(sender, mediainfo = None, url = None, item_name = None):
 	
 	mc = ObjectContainer(view_group = "InfoList", title1=sender.title2, title2= item_name)
 	
+	mediainfo2 = GetMediaInfo(url, mediainfo.type)
+	#Log(str(mediainfo2))
+	
+	if (mediainfo2 is None or mediainfo2.id is None):
+		mediainfo2 = mediainfo
+		
+	# Copy some values across from what we've been passed if meta provider couldn't find data.
+	if mediainfo2.poster is None:
+		mediainfo2.poster = mediainfo.poster
+	
 	for item in GetSources(url):
 	
 		if (item['quality'] == "sponsored"):
 			continue
-				
-		# Log(item)
-		mc.add(GetItemForSource(mediainfo = mediainfo, item = item))
+					
+		mediaItem = GetItemForSource(mediainfo=mediainfo2, item=item)
+		if mediaItem is not None:
+			mc.add(mediaItem)
 		
+	if len(mc.objects) == 0:
+		mc.header = "No Enabled Sources Found"
+		mc.message = ""
 	return mc
 	
 ####################################################################################################
@@ -559,7 +583,7 @@ def SearchResultsMenu(sender, query, type):
 					item.title,
 					subtitle= "",
 					summary= "",
-					thumb= item.thumb,
+					thumb= item.poster,
 					art="",
 					ratings= item.rating
 				),
@@ -577,6 +601,82 @@ def SearchResultsMenu(sender, query, type):
 
 ####################################################################################################
 # PAGE PARSING
+####################################################################################################
+
+def GetMediaInfo(url, type):
+
+	# The description meta header for some shows inserts random double quotes in the
+	# content which breaks the parsing of the page. Work around that by simply
+	# removing the head section in which the meta elements are contained.
+	headMassage = [(re.compile('<head>(.*)</head>', re.S), lambda match: '')]
+	soupMassage = copy.copy(BeautifulSoup.MARKUP_MASSAGE)
+	soupMassage.extend(headMassage)
+	
+	soup = BeautifulSoup(HTTP.Request(LMWT_URL + url).content, markupMassage=soupMassage)
+
+	try:
+		imdb_link = soup.find('div','mlink_imdb').a['href']
+		imdb_id = re.search("(tt\d+)", str(imdb_link)).group()
+		
+		mediainfo = DBProvider().GetProvider(type).RetrieveItemFromProvider(imdb_id)
+		
+		# Also parse the LMWT page and extract out any info not set by the meta provider.
+		info_div = soup.find('div', 'movie_info')
+		
+		# First, extract out description...
+		info = {}
+		info['Description:'] = info_div.find('td', { 'colspan': '2' }).text
+		
+		# Then, ratinga....
+		info['Rating:'] = info_div.find('li', 'current-rating').text
+		
+		# Extract out any other info.
+		for row in info_div.findAll('tr'):
+			row_items = row.findAll('td')
+			if len(row_items) <> 2 or "colspan" in str(row_items[0]):
+				continue
+			info[row_items[0].text] = row_items[1].text
+		
+		# Map available extracted info back to the media info object.
+		# First, define the mapping between LMWT items and media info and an additional function
+		# to extract out sane info out of the LMWT data.
+		item_map = {
+			'Description:' : ['summary', lambda x: decode_htmlentities(x)], 
+			'Air Date:' : ['releasedate', lambda x: datetime.strptime(x, '%B %d, %Y')],
+			'Runtime:' : ['duration', lambda x: int(re.search("(\d*)", x).group(0)) * 60 * 1000 if int(re.search("(\d*)", x).group(0)) * 60 * 1000 < sys.maxint else 0],
+			'Rating:' : ['rating', lambda x: float(re.search("([\d\.]+)", x).group(0)) * 2],
+		}
+		
+		# For each extracted item from LMWT...
+		for lmwt_item in info.keys():
+		
+			#Log("Processing: " + lmwt_item)
+			# Look for matching entry in map...
+			if lmwt_item not in item_map.keys():
+				continue
+				
+			mi_item = item_map[lmwt_item]
+			
+			if (mi_item is None):
+				#Log("Couldn't find a mi attr!")
+				continue
+				
+			try:
+				# And see if it's already set in the mediaInfo object.
+				mi_val = getattr(mediainfo, mi_item[0], None)
+				
+				# And set it if it's not already.
+				if (mi_val is None):
+					setattr(mediainfo, mi_item[0],  mi_item[1](info[lmwt_item]))
+						
+			except Exception, ex:
+				pass
+				
+		return mediainfo
+
+	except Exception, ex:
+		return None
+
 ####################################################################################################
 
 def GetSources(url):
@@ -641,7 +741,7 @@ def GetSources(url):
 		views = item.find('span', { 'class': 'version_veiws' }).string
 		source['views'] = re.search("\D*(\d*)", views).group(1)
 		
-		# Log(source)
+		#Log(source)
 		sources.append(source)
 	
 	return sources
@@ -719,6 +819,8 @@ def GetItems(type, genre = None, sort = None, alpha = None, pages = 5, start_pag
 			#Log('Found item: ' + str(item))
 			res = MediaInfo()
 			
+			res.type = type
+
 			# Extract out title
 			title_alt = item.find('a')['title']
 			res.title = re.search("Watch (.*)", title_alt).group(1)
@@ -727,7 +829,7 @@ def GetItems(type, genre = None, sort = None, alpha = None, pages = 5, start_pag
 			res.id = item.a['href']
 			
 			# Extract out thumb
-			res.thumb = item.find('img')['src']
+			res.poster = item.find('img')['src']
 			
 			# Extract out rating
 			rating_style = item.find('li')['style']
@@ -739,7 +841,7 @@ def GetItems(type, genre = None, sort = None, alpha = None, pages = 5, start_pag
 			# Add to item list.
 			#Log("Adding item: " + str(res))
 			items.append(res)
-			
+		
 	return items
 
 
@@ -788,7 +890,7 @@ def GetSearchResults(query=None,type=None,):
 	
 	for item in soup.findAll("div", { 'class': 'index_item index_item_ie' }):
 	
-		# Log('Found item: ' + str(item))
+		#Log('Found item: ' + str(item))
 		res = MediaInfo()
 		
 		# Extract out title
@@ -799,7 +901,7 @@ def GetSearchResults(query=None,type=None,):
 		res.id = item.a['href']
 		
 		# Extract out thumb
-		res.thumb = item.find('img')['src']
+		res.poster = item.find('img')['src']
 		
 		# Extract out rating
 		rating_style = item.find('li')['style']
@@ -809,7 +911,7 @@ def GetSearchResults(query=None,type=None,):
 		#Log("Adding item: " + str(res))
 		items.append(res)
 	
-	# Log(items)
+	#Log(items)
 	return items
 
 	
@@ -818,40 +920,45 @@ def GetSearchResults(query=None,type=None,):
 ####################################################################################################
 
 def GetItemForSource(mediainfo, item):
-
-	summary = (
-		"Provider: " + item['provider_name'] + "\n" + 
-		"Quality: " + item['quality'] + "\n" + 
-		"Views: " + str(item['views']) + "\n" +
-		"Provider Rating: " + str(item['rating']) + "/100"
-	)
 	
-	providers_with_service = [
-		'putlocker.com', 'sockshare.com',
-		'movpod.net', 'movpod.in', 'daclips.com', 'daclips.in', 'gorillavid.com', 'gorillavid.in',
-		'youtube.com',
-		'zalaa.com',
-		'vidbux.com','vidxden.com'
-	]
+	providerInfoURL = "http://providerinfo." + item['provider_name'] + "/?plugin=lmwt"
+			
+	# See if provider is supported.
+	providerInfo = URLService.NormalizeURL(providerInfoURL)
 	
-	if (item['provider_name'] in providers_with_service):
+	if (providerInfo != providerInfoURL):
 	
+		# Extract out query string which represents the provider's arguments (if any...)
+		url_qs = urlparse(providerInfo).query
+		
 		return VideoClipObject(
-			url = LMWT_URL + item['url'],
-			title = item['name'],
-			summary = summary,
-			thumb= mediainfo.thumb,
+			url = LMWT_URL + item['url'] + "&provider_args=" + urllib.quote_plus(url_qs),
+			title = item['name'] + " - " + item['provider_name'],
+			summary=mediainfo.summary,
+			art=mediainfo.background,
+			thumb= mediainfo.poster,
 			rating = float(mediainfo.rating),
+			duration=mediainfo.duration,
+			source_title = item['provider_name'] ,
+			year=mediainfo.year,
+			originally_available_at=mediainfo.releasedate,
+			genres=mediainfo.genres
 		)
-						
+	
 	else:
 	
-		return DirectoryObject(
-			key = Callback(PlayVideoNotSupported, mediainfo = mediainfo, url = item['url']),
-			title = item['name'] + " (Not currently playable)",
-			summary= summary,
-			thumb= mediainfo.thumb,
-		)
+		if (Prefs['show_unsupported']):
+			return DirectoryObject(
+				key = Callback(PlayVideoNotSupported, mediainfo = mediainfo, url = item['url']),
+				title = item['name'] + " - " + item['provider_name'] + " (Not playable)",
+				summary= mediainfo.summary,
+				art=mediainfo.background,
+				thumb= mediainfo.poster,
+			)
+			
+		else:
+			return
+			
 		
 						
 ####################################################################################################
@@ -859,6 +966,35 @@ def GetItemForSource(mediainfo, item):
 def PlayVideoNotSupported(mediainfo, url):
 
 	return ObjectContainer(
-		header='Provider not currently supported...',
+		header='Provider is either not currently supported or has been disabled in preferences...',
 		message=''
 	)
+	
+###############################################################################
+# UTIL METHODS
+###############################################################################
+# Substitute single HTML entity with match real character.
+
+def substitute_entity(match):
+	ent = match.group(3)
+	
+	if match.group(1) == "#":
+		if match.group(2) == '':
+			return unichr(int(ent))
+		elif match.group(2) == 'x':
+			return unichr(int('0x'+ent, 16))
+	else:
+		cp = n2cp.get(ent)
+
+		if cp:
+			return unichr(cp)
+		else:
+			return match.group()
+
+###############################################################################
+# Replace encoded HTML entities with matching real character.
+
+def decode_htmlentities(string):
+	entity_re = re.compile(r'&(#?)(x?)(\d{1,5}|\w{1,8});')
+	return entity_re.subn(substitute_entity, string)[0]
+	

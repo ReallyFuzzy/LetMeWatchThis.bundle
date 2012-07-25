@@ -1,0 +1,1 @@
+[	{		"id": "show_vidbux", "label": "VidBux",		"type": "bool", "default": "true",	},	{		"id": "show_vidxden", "label": "VidxDen",		"type": "bool", "default": "true",	},]

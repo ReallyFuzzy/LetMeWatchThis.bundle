@@ -4,5 +4,11 @@
         "type": "bool",
         "label": "Help measure interest in this plugin",
         "default": "true"
+    },
+    {
+        "id": "show_unsupported",
+        "type": "bool",
+        "label": "Show unsupported and disabled providers",
+        "default": "false"
     }
 ]

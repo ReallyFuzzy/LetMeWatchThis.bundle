@@ -1,0 +1,1 @@
+[	{		"id": "show_movpod", "label": "MovPod",		"type": "bool", "default": "true",	},	{		"id": "show_daclips", "label": "DaClips",		"type": "bool", "default": "true",	},	{		"id": "show_gorillavid", "label": "GorillaVid",		"type": "bool", "default": "true",	},]

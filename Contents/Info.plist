@@ -61,53 +61,5 @@
 		<string>H.263</string>
 	</array>
 	
-	<key>PlexURLServices</key>
-	<dict>
-		<key>LMWT</key>
-		<dict>
-			<key>Identifier</key>
-			<string>com.plexapp.plugins.letmewatchthis.lmwt</string>
-			
-			<key>URLPattern</key>
-			<string>http://www.1channel.ch/external.php\?title=</string>		
-		</dict>
-		
-		<key>MovPod</key>
-		<dict>
-			<key>Identifier</key>
-			<string>com.plexapp.plugins.letmewatchthis.movpod</string>
-			
-			<key>URLPattern</key>
-			<string>http://(www\.)?(movpod|daclips|gorillavid)\.(com|in|net)/[\d\w]{5,}</string>		
-		</dict>
-		
-		<key>PutLocker</key>
-		<dict>
-			<key>Identifier</key>
-			<string>com.plexapp.plugins.letmewatchthis.putlocker</string>
-			
-			<key>URLPattern</key>
-			<string>http://(www\.)?(putlocker|sockshare)\.com/</string>		
-		</dict>
-		
-		<key>Zalaa</key>
-		<dict>
-			<key>Identifier</key>
-			<string>com.plexapp.plugins.letmewatchthis.zalaa</string>
-			
-			<key>URLPattern</key>
-			<string>http://(www\.)?zalaa\.com/[\d\w]{5,}</string>		
-		</dict>
-		
-		<key>VidBux</key>
-		<dict>
-			<key>Identifier</key>
-			<string>com.plexapp.plugins.letmewatchthis.vidbux</string>
-			
-			<key>URLPattern</key>
-			<string>http://(www\.)?(vidbux|vidxden)\.com/[\d\w]{5,}</string>		
-		</dict>
-	</dict>
-	
 </dict>
 </plist>
