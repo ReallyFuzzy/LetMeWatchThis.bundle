@@ -20,8 +20,8 @@ NAME = L('Title')
 
 VERSION = "12.07.25.1"
 VERSION_URLS = {
-	"12.07.25.0": "http://bit.ly/OZBBRR",
-	"12.07.19.0": "http://bit.ly/MxCuqr",
+	"12.07.25.1": "http://bit.ly/OZBBRR",
+	"12.07.19.1": "http://bit.ly/MxCuqr",
 	"12.05.28.1": "http://bit.ly/JJvDZO",
 	"12.05.01.1": "http://bit.ly/IpYhy9",
 	"12.04.18.1": "http://bit.ly/JajQNI",
@@ -704,7 +704,7 @@ def GetSources(url):
 		if (source['name'].lower().find('trailer') >= 0):
 			continue
 		
-		#ÊExtract out source quality.
+		#ï¿½Extract out source quality.
 		quality_elem = item.find('span', { 'class': re.compile('quality_.*') })
 		quality = re.search("quality_(.*)", quality_elem['class']).group(1)
 		source['quality'] = quality
