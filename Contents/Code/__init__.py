@@ -94,9 +94,9 @@ def Start():
 	HTTP.Headers['Connection'] = 'keep-alive'
 	
 	if (Prefs['versiontracking'] == True):
-		request = urllib2.Request(VERSION_URLS[VERSION])
-		request.add_header('User-agent', '-')
 		try:
+			request = urllib2.Request(VERSION_URLS[VERSION])
+			request.add_header('User-agent', '-')	
 			response = urllib2.urlopen(request)
 		except:
 			pass
