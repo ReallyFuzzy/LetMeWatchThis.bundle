@@ -1,1 +1,1 @@
-[	{		"id": "show_zalaa", "label": "Zalaa",		"type": "bool", "default": "true",	},]
+[	{		"id": "show_zalaa", "label": "Zalaa",		"type": "bool", "default": "true",	},	{		"id": "show_uploadc", "label": "UploadC",		"type": "bool", "default": "true",	},	]
