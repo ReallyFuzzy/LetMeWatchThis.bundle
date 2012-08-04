@@ -1,0 +1,1 @@
+[	{		"id": "show_youtube", "label": "YouTube",		"type": "bool", "default": "true",	},	{		"id": "show_dailymotion", "label": "DailyMotion",		"type": "bool", "default": "true",	},	{		"id": "show_vimeo", "label": "Vimeo",		"type": "bool", "default": "true",	},]
