@@ -33,9 +33,7 @@ VERSION_URLS = {
 	"1.0" : "http://bit.ly/ypSj0G"
 }
 
-LATEST_VERSION_URL = 'http://bit.ly/xoGzzQ'
-LATEST_VERSION = 'LATEST_VERSION'
-LATEST_VERSION_SUMMARY = 'LATEST_VERSION_SUMMARY'
+LATEST_VERSION_URL = 'https://bit.ly/xoGzzQ'
 
 # make sure to replace artwork with what you want
 # these filenames reference the example files in
@@ -155,30 +153,35 @@ def VideoMainMenu():
 	)
 	
 	# Get latest version number of plugin.
-	soup = BeautifulSoup(HTTP.Request(LATEST_VERSION_URL, cacheTime=3600).content)
-	Dict[LATEST_VERSION] = soup.find('div',{'class':'markdown-body'}).p.string
+	try:
 	
-	if (Dict[LATEST_VERSION] != VERSION):
-	
-		summary = soup.find('div',{'class':'markdown-body'}).pre.code.string
-		summary += "\nClick to be taken to the Unsupported App Store"
-		Dict[LATEST_VERSION_SUMMARY] = summary
+		soup = BeautifulSoup(HTTP.Request(LATEST_VERSION_URL, cacheTime=3600).content)
+		latest_version = soup.find('div',{'class':'markdown-body'}).p.string
 		
-		dir.autoRefresh = 15
+		if (latest_version != VERSION):
 		
-		dir.Append(
-			Function(
-				DirectoryItem(
-					UpdateMenu,
-					title='Update Available',
-					subtitle="Version " + Dict[LATEST_VERSION] + " is now available. You have " + VERSION,
-					summary=Dict[LATEST_VERSION_SUMMARY],
-					thumb=None,
-					art=R(ART)
+			summary = soup.find('div',{'class':'markdown-body'}).pre.code.string
+			summary += "\nClick to be taken to the Unsupported App Store"
+			latest_version_summary = summary
+			
+			dir.autoRefresh = 15
+			
+			dir.Append(
+				Function(
+					DirectoryItem(
+						UpdateMenu,
+						title='Update Available',
+						subtitle="Version " + latest_version + " is now available. You have " + VERSION,
+						summary=latest_version_summary,
+						thumb=None,
+						art=R(ART)
+					),
 				),
-			),
-		)
-	
+			)
+			
+	except Exception, ex:
+		Log("******** Error retrieving and processing latest version information. Exception is:\n" + str(ex))
+		
 	return dir
 
 ####################################################################################################
