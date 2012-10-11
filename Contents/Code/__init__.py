@@ -47,6 +47,7 @@ MOVIE_ICON='icon-movie.png'
 MOVIE_HD_ICON='icon-movie-hd.png'
 TV_ICON='icon-tv.png'
 AZ_ICON='icon-az.png'
+FEATURED_ICON='icon-featured.png'
 STANDUP_ICON='icon-standup.png'
 GENRE_BASE='icon-genre'
 GENRE_ICON=GENRE_BASE + '.png'
@@ -230,6 +231,8 @@ def TypeMenu(sender, type = None, genre = None):
 			section_name="Popular",
 		)
 	)
+
+	dir.Append(		Function(			DirectoryItem(				ItemsMenu,				"Featured",				subtitle="",				summary="List of featured " + type_desc,				thumb=R(FEATURED_ICON),				art=R(ART)			),			type=type,			genre=genre,			sort="featured",			section_name="Featured",		)	)
 
 	dir.Append(
 		Function(
