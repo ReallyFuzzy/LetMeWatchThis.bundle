@@ -4,16 +4,19 @@ import urllib
 import urllib2
 import copy
 import sys
+import base64
 
 from datetime import date, datetime
 from htmlentitydefs import name2codepoint as n2cp
 from urlparse import urlparse
 
 from BeautifulSoup import BeautifulSoup
-from Utils import MediaInfo
-from MetaProviders import DBProvider
+from MetaProviders import DBProvider, MediaInfo
+from RecentItems import BrowsedItems, ViewedItems
 
 cerealizer.register(MediaInfo)
+cerealizer.register(BrowsedItems)
+cerealizer.register(ViewedItems)
 
 VIDEO_PREFIX = "/video/lmwt"
 NAME = L('Title')
@@ -51,8 +54,11 @@ STANDUP_ICON='icon-standup.png'
 GENRE_BASE='icon-genre'
 GENRE_ICON=GENRE_BASE + '.png'
 
-LMWT_URL = "http://www.1channel.ch"
+LMWT_URL = "http://www.1channel.ch/"
 LMWT_SEARCH_URL= "http://www.1channel.ch/index.php"
+
+VIEW_HIST_KEY = "USER_VIEWING_HISTORY"
+BROWSED_ITEMS_KEY = "RECENT_BROWSED_ITEMS"
 
 USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_7_2) AppleWebKit/534.51.22 (KHTML, like Gecko) Version/5.1.1 Safari/534.51.22'
 	
@@ -83,6 +89,8 @@ def Start():
 	MediaContainer.art = R(ART)
 	MediaContainer.userAgent = USER_AGENT
 	
+	ObjectContainer.art=R(ART)
+
 	DirectoryItem.thumb = R(APP_ICON)
 	VideoItem.thumb = R(APP_ICON)
 	
@@ -113,40 +121,46 @@ def ValidatePrefs():
 
 def VideoMainMenu():
 	
-	dir = MediaContainer(noCache=True, title1=L("Video Channels"), title2=NAME, viewGroup="InfoList")
+	oc = ObjectContainer(no_cache=True, title1=L("Video Channels"), title2=NAME, view_group="InfoList")
 	
-	dir.Append(
-		Function(
-			DirectoryItem(
-				TypeMenu,
-				L('MoviesTitle'),
-				subtitle = L('MoviesSubtitle'),
-				summary= L('MoviesSummary'),
-				thumb = R(MOVIE_ICON),
-				art = R(ART)
-			),
-			type = "movies",
+	oc.add(
+		DirectoryObject(
+			key=Callback(TypeMenu, type="movies", parent_name=oc.title2),
+			title=L('MoviesTitle'),
+			tagline=L('MoviesSubtitle'),
+			summary= L('MoviesSummary'),
+			thumb = R(MOVIE_ICON),
+			art = R(ART)	
 		)
 	)
 
-	dir.Append(
-		Function(
-			DirectoryItem(
-				TypeMenu,
-				L("TVTitle"),
-				subtitle=L("TVSubtitle"),
-				summary=L("TVSummary"),
-				thumb=R(TV_ICON),
-				art=R(ART)
-			),
-			type="tv",
+	oc.add(
+		DirectoryObject(
+			key=Callback(TypeMenu, type="tv", parent_name=oc.title2),
+			title=L("TVTitle"),
+			tagline=L("TVSubtitle"),
+			summary=L("TVSummary"),
+			thumb=R(TV_ICON),
+			art=R(ART)
 		)
 	)
 	
-	dir.Append(
-		PrefsItem(
+	if (Prefs['watched_amount'] != 'Disabled'):
+		oc.add(
+			DirectoryObject(
+				key=Callback(HistoryMenu,parent_name=oc.title2,),
+				title=L("HistoryTitle"),
+				tagline=L("HistorySubtitle"),
+				summary=L("HistorySummary"),
+				thumb=R("History.png"),
+			)
+		)
+	
+	
+	oc.add(
+		PrefsObject(
 			title=L("PrefsTitle"),
-			subtile=L("PrefsSubtitle"),
+			tagline=L("PrefsSubtitle"),
 			summary=L("PrefsSummary"),
 			thumb=R(PREFS_ICON)
 		)
@@ -164,30 +178,26 @@ def VideoMainMenu():
 			summary += "\nClick to be taken to the Unsupported App Store"
 			latest_version_summary = summary
 			
-			dir.autoRefresh = 15
-			
-			dir.Append(
-				Function(
-					DirectoryItem(
-						UpdateMenu,
-						title='Update Available',
-						subtitle="Version " + latest_version + " is now available. You have " + VERSION,
-						summary=latest_version_summary,
-						thumb=None,
-						art=R(ART)
-					),
-				),
+			oc.add(
+				DirectoryObject(
+					key=Callback(UpdateMenu),
+					title='Update Available',
+					tagline="Version " + latest_version + " is now available. You have " + VERSION,
+					summary=latest_version_summary,
+					thumb=None,
+					art=R(ART)
+				)
 			)
 			
 	except Exception, ex:
 		Log("******** Error retrieving and processing latest version information. Exception is:\n" + str(ex))
 		
-	return dir
+	return oc
 
 ####################################################################################################
 # Menu users seen when they select Update in main menu.
 
-def UpdateMenu(sender):
+def UpdateMenu():
 
 	# Force an update to the UAS' version info.
 	HTTP.Request(
@@ -202,7 +212,7 @@ def UpdateMenu(sender):
 ####################################################################################################
 # Menu users seen when they select TV shows in Main menu
 
-def TypeMenu(sender, type = None, genre = None):
+def TypeMenu(type=None, genre=None, path=[], parent_name=None):
 
 	type_desc = "Movies"
 	if (type == "tv"):
@@ -212,160 +222,175 @@ def TypeMenu(sender, type = None, genre = None):
 	if genre is not None:
 		mcTitle2 = mcTitle2 + " (" + genre + ")"
 
-	dir = MediaContainer(noCache=True,title1=sender.title2, title2=mcTitle2, viewGroup="InfoList")
+	path = path + [{'elem': mcTitle2, 'type': type, 'genre': genre}]
+
+	oc = ObjectContainer(no_cache=True, title1=parent_name, title2=mcTitle2, view_group="InfoList")
 	
-	dir.Append(
-		Function(
-			DirectoryItem(
-				ItemsMenu,
-				"Popular",
-				subtitle="",
-				summary="List of most popular " + type_desc,
-				thumb=S("Popular.png"),
-				art=R(ART)
+	oc.add(
+		DirectoryObject(
+			key=Callback(
+				ItemsMenu,type=type,
+				genre=genre,
+				sort="views",
+				section_name="Popular",
+				path=path,
+				parent_name=oc.title2,
 			),
-			type=type,
-			genre=genre,
-			sort="views",
-			section_name="Popular",
+			title="Popular",
+			tagline="",
+			summary="List of most popular " + type_desc,
+			thumb=R("Popular.png"),
+			art=R(ART)	
 		)
 	)
 
-	dir.Append(
-		Function(
-			DirectoryItem(
+	oc.add(
+		DirectoryObject(
+			key=Callback(
 				ItemsMenu,
-				"Highly Rated",
-				subtitle="",
-				summary="List of highly rated " + type_desc,
-				thumb=S("Favorite.png"),
-				art=R(ART)
+				type=type,
+				genre=genre,
+				sort="ratings",
+				section_name="Highly Rated",
+				path=path,
+				parent_name=oc.title2,
 			),
-			type=type,
-			genre=genre,
-			sort="ratings",
-			section_name="Highly Rated",
+			title="Highly Rated",
+			tagline="",
+			summary="List of highly rated " + type_desc,
+			thumb=R("Favorite.png"),
+			art=R(ART)
 		)
 	)
 	
-	dir.Append(
-		Function(
-			DirectoryItem(
+	oc.add(
+		DirectoryObject(
+			key=Callback(
 				ItemsMenu,
-				"Recently Added",
-				subtitle="",
-				summary="List of recently added " + type_desc,
-				thumb=S("History.png"),
-				art=R(ART)
+				type=type,
+				genre=genre,
+				sort='date',
+				section_name="Recently Added",
+				path=path,
+				parent_name=oc.title2,
 			),
-			type=type,
-			genre=genre,
-			sort='date',
-			section_name="Recently Added",
+			title="Recently Added",
+			tagline="",
+			summary="List of recently added " + type_desc,
+			thumb=R("History.png"),
+			art=R(ART)
 		)
 	)
 		
-	dir.Append(
-		Function(
-			DirectoryItem(
+	oc.add(
+		DirectoryObject(
+			key=Callback(
 				ItemsMenu,
-				"Latest Releases",
-				subtitle="",
-				summary="List of latest releases",
-				thumb=S("Recent.png"),
-				art=R(ART)
+				type=type,
+				genre=genre,
+				sort='release',
+				section_name="Latest Releases",
+				path=path,
+				parent_name=oc.title2,
 			),
-			type=type,
-			genre=genre,
-			sort='release',
-			section_name="Latest Releases",
+			title="Latest Releases",
+			tagline="",
+			summary="List of latest releases",
+			thumb=R("Recent.png"),
+			art=R(ART)
 		)
 	)
-	
 	
 	if genre is None:
 			
-		dir.Append(
-			Function(
-				DirectoryItem(
+		oc.add(
+			DirectoryObject(
+				key=Callback(
 					GenreMenu,
-					"Genre",
-					subtitle= type_desc +" by genre",
-					summary="Browse " + type_desc + " by genre.",
-					thumb=R(GENRE_ICON),
-					art=R(ART),
+					type=type,
+					path=path,
+					parent_name=oc.title2,
 				),
-				type = type,
+				title="Genre",
+				tagline=type_desc +" by genre",
+				summary="Browse " + type_desc + " by genre.",
+				thumb=R(GENRE_ICON),
+				art=R(ART),
 			)
 		)
 		
-	dir.Append(
-		Function(
-			DirectoryItem(
+	oc.add(
+		DirectoryObject(
+			key=Callback(
 				AZListMenu,
-				"A-Z List",
-				subtitle="Complete list of " + type_desc,
-				summary="Watch High Quality " + type_desc,
-				thumb=R(AZ_ICON),
-				art=R(ART)
+				type=type,
+				genre=genre,
+				path=path,
+				parent_name=oc.title2,
 			),
-			type=type,
-			genre = genre,
+			title="A-Z List",
+			tagline="Complete list of " + type_desc,
+			summary="Browse " + type_desc + " in alphabetical order",
+			thumb=R(AZ_ICON),
+			art=R(ART)
 		)
 	)
 		
 	if genre is None:
 		
-		dir.Append(
-			Function(
-				InputDirectoryItem(
+		oc.add(
+			InputDirectoryObject(
+				key=Callback(
 					SearchResultsMenu,
-					"Search",
-					"",
-					summary="Search for a title using this feature",
-					thumb=R(SEARCH_ICON),
-					art=R(ART)
+					type=type,
 				),
-				type=type,
+				title="Search",
+				tagline="Search for a title using this feature",
+				summary="Search for a title using this feature",
+				prompt="Please enter a search term",
+				thumb=R(SEARCH_ICON),
+				art=R(ART)				
 			)
 		)
 	
-	return dir
+	return oc
 
 
 ####################################################################################################
 
-def AZListMenu(sender,type=None, genre=None, sort=None, alpha=None):
+def AZListMenu(type=None, genre=None, path=None, parent_name=None):
 
-	mc = MediaContainer( viewGroup = "InfoList" , title1=sender.title2, title2 = "A-Z")
+	oc = ObjectContainer(view_group="InfoList", title1=parent_name, title2="A-Z")
 	azList = ['123','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z']
 	
 	for value in azList:
-		mc.Append(
-			Function(
-				DirectoryItem(
+		oc.add(
+			DirectoryObject(
+				key=Callback(
 					ItemsMenu,
-					value,
-					subtitle="Complete collection arranged alphabetically",
-					summary="Browse High Quality collection",
-					thumb=R(AZ_ICON),
-					art=R(ART)
+					type=type,
+					genre=genre,
+					sort=None,
+					alpha=value,
+					section_name=value,
+					path=path,
+					parent_name=oc.title2,
 				),
-				type=type,
-				genre=genre,
-				sort=sort,
-				alpha=value,
-				section_name=value,
+				title=value,
+				tagline="Complete collection arranged alphabetically",
+				summary="Browse items starting with " + value,
+				thumb=R(AZ_ICON),
+				art=R(ART),
 			)
 		)
 		
-	return mc
+	return oc
 
 ####################################################################################################
 
-def GenreMenu(sender, type=None):
+def GenreMenu(type=None, path=None, parent_name=None):
 
-	dir = MediaContainer(noCache=True,title1=sender.title2, title2="Genre", viewGroup="InfoList",httpCookies=HTTP.CookiesForURL('http://www.megaupload.com/'))
+	oc = ObjectContainer(no_cache=True, title1=parent_name,title2="Genre", view_group="InfoList")
 	
 	genres = [
 		"Action", "Adventure", "Animation", "Biography", "Comedy", "Crime", "Documentary", "Drama",
@@ -380,36 +405,40 @@ def GenreMenu(sender, type=None):
 			("Couldn't find icon for genre: " + genre.lower())
 			icon = R(GENRE_ICON)
 			
-		dir.Append(
-			Function(
-				DirectoryItem(
+		oc.add(
+			DirectoryObject(
+				key=Callback(
 					TypeMenu,
-					genre,
-					subtitle="",
-					summary="Browse all : " + genre + ".",
-					thumb=icon,
-					art=R(ART),
+					type=type,
+					genre=genre,
+					path=path,
+					parent_name=oc.title2,
 				),
-				type = type,
-				genre = genre,
+				title=genre,
+				tagline="",
+				summary="Browse all : " + genre + ".",
+				thumb=icon,
+				art=R(ART),
 			)
 		)
 		
-	return dir
+	return oc
 
 
 ####################################################################################################
 
-def ItemsMenu(sender,type=None,genre=None,sort=None,alpha=None,section_name="", start_page=0):
+def ItemsMenu(
+	type=None, genre=None, sort=None, alpha=None,
+	section_name="", start_page=0, path=[], parent_name=None
+):
 
 	num_pages = 5
-	replace_parent = sender.title2 == section_name
-	title1 = sender.title2
+	replace_parent = False
 	title2 = section_name
-	if (replace_parent):
-		title1 = sender.title1
 	
-	mc = MediaContainer(noCache = True, viewGroup = "ListInfo", title1=title1, title2=title2, replaceParent = replace_parent)
+	oc = ObjectContainer(no_cache=False, view_group="InfoList", title1=parent_name, title2=title2, replace_parent=replace_parent)
+	
+	path = path + [{'elem': title2, 'type':type, 'genre':genre, 'sort':sort, 'alpha':alpha, 'section_name':section_name}]
 	
 	items = GetItems(type, genre, sort, alpha, num_pages, start_page)
 	
@@ -419,161 +448,211 @@ def ItemsMenu(sender,type=None,genre=None,sort=None,alpha=None,section_name="", 
 		func_name = SourcesMenu
 		
 	if (start_page > 0):
-		mc.Append(
-			Function(
-				DirectoryItem(
+		oc.add(
+			DirectoryObject(
+				key=Callback(
 					ItemsMenu,
-					"<< Previous",
-					subtitle="",
-					summary= "",
-					thumb= "",
-					art="",
+					type=type,
+					genre=genre,
+					sort=sort,
+					alpha=alpha,
+					section_name=section_name,
+					start_page=start_page - num_pages,
+					parent_name=oc.title2,
 				),
-				type = type,
-				genre = genre,
-				sort = sort,
-				alpha = alpha,
-				section_name = section_name,
-				start_page = start_page - num_pages
-			)
+				title="<< Previous",
+				tagline="",
+				summary= "",
+				thumb= "",
+				art="",
+			)				
 		)
 	
 	for item in items:
 	
 		#Log(item)
-		mc.Append(
-			Function(
-				DirectoryItem(
+		oc.add(
+			DirectoryObject(
+				key=Callback(
 					func_name,
-					item.title,
-					subtitle="",
-					summary= "",
-					thumb= item.poster,
-					art="",
-					rating = item.rating
+					mediainfo=item,
+					url=item.id,
+					path=path,
+					parent_name=oc.title2,
 				),
-				mediainfo = item,
-			)
-		)
-		
-	mc.Append(
-		Function(
-			DirectoryItem(
-				ItemsMenu,
-				"More >>",
-				subtitle="",
-				summary= "",
-				thumb= "",
+				title=item.title,
+				tagline="",
+				summary="",
+				thumb= item.poster,
 				art="",
-			),
-			type = type,
-			genre = genre,
-			sort = sort,
-			alpha = alpha,
-			section_name = section_name,
-			start_page = start_page + num_pages
-		)
-	)
-
-	return mc
-	
-####################################################################################################
-
-def TVSeasonMenu(sender, mediainfo = None):
-
-	mc = MediaContainer(viewGroup = "ListInfo", title1=sender.title2, title2= mediainfo.title)
-	
-	#Log(mediainfo)
-	items = GetTVSeasons(mediainfo)
-	
-	for item in items:
-		mc.Append(
-			Function(
-				DirectoryItem(
-					TVSeasonShowsMenu,
-					item[0],
-					subtitle="",
-					summary= "",
-					thumb= mediainfo.poster,
-					art="",
-					ratings= mediainfo.rating
-				),
-				mediainfo = mediainfo,
-				season_info = item,
-			)
-		)
-
-	return mc
-
-####################################################################################################
-
-def TVSeasonShowsMenu(sender, mediainfo = None, season_info = None):
-
-	mc = MediaContainer(viewGroup = "ListInfo", title1=sender.title2, title2= season_info[0])
-		
-	for item in GetTVSeasonShows(season_info[1]):
-	
-		mc.Append(
-			Function(
-				DirectoryItem(
-					SourcesMenu,
-					item[0],
-					subtitle= mediainfo.title,
-					summary= "",
-					thumb= mediainfo.poster,
-					art="",
-					ratings= mediainfo.rating
-				),
-				mediainfo = mediainfo,
-				url = item[1],
-				item_name = item[0],
-				
 			)
 		)
 			
-	return mc
+	oc.add(
+		DirectoryObject(
+			key=Callback(
+				ItemsMenu,
+				type=type,
+				genre=genre,
+				sort=sort,
+				alpha=alpha,
+				section_name=section_name,
+				start_page=start_page + num_pages,
+				parent_name=oc.title2,
+			),
+			title="More >>",
+			tagline="",
+			summary= "",
+			thumb= "",
+			art="",
+		)
+	)
+	
+	return oc
+	
+####################################################################################################
+
+def TVSeasonMenu(mediainfo=None, url=None, item_name=None, path=[], parent_name=None):
+
+	if (item_name is not None):
+		mediainfo.show_name = item_name
+		
+	if (mediainfo.show_name is None and mediainfo.title is not None):
+		mediainfo.show_name = mediainfo.title
+								
+	oc = ObjectContainer(view_group = "InfoList", title1=parent_name, title2=mediainfo.show_name)
+	
+	path = path + [{'elem':mediainfo.show_name, 'show_url':url}]
+	
+	#Log(mediainfo)
+	
+	items = GetTVSeasons("/" + url)
+	
+	for item in items:
+		oc.add(
+			DirectoryObject(
+				key=Callback(
+					TVSeasonShowsMenu,
+					mediainfo=mediainfo,
+					item_name=item[0],
+					season_url=item[1],
+					path=path,
+					parent_name=oc.title2,
+				),
+				title=item[0],
+				tagline="",
+				summary="",
+				thumb=mediainfo.poster,
+				art="",
+			)
+		)
+
+	return oc
 
 ####################################################################################################
 
-def SourcesMenu(sender, mediainfo = None, url = None, item_name = None):
+def TVSeasonShowsMenu(mediainfo=None, season_url=None,item_name=None, path=[], parent_name=None):
+
+	path = path + [{'elem':item_name,'season_url':season_url}]
 	
-	if (url is None):
-		url = mediainfo.id
-		
+	if (item_name is not None):
+		mediainfo.season = item_name
+	
+	oc = ObjectContainer(view_group="InfoList", title1=parent_name, title2=item_name)
+	
+	for item in GetTVSeasonShows("/" + season_url):
+	
+		oc.add(
+			DirectoryObject(
+				key=Callback(
+					SourcesMenu,
+					mediainfo=mediainfo,
+					url=item[1],
+					item_name=item[0],
+					path=path,
+					parent_name=oc.title2,
+				),
+				title=item[0],
+				tagline=mediainfo.title,
+				summary="",
+				thumb= mediainfo.poster,
+				art="",		
+			)
+		)
+			
+	return oc
+
+####################################################################################################
+
+def SourcesMenu(mediainfo=None, url=None, item_name=None, path=[], parent_name=None):
+	
 	if (item_name is None):
 		item_name = mediainfo.title
 	
-	mc = ObjectContainer(view_group = "InfoList", title1=sender.title2, title2= item_name)
+	path = path + [ { 'elem': item_name, 'url': url } ]
 	
+	oc = ObjectContainer(view_group="InfoList", title1=parent_name, title2=item_name)
+	
+	# Get as much meta data as possible about this item.
 	mediainfo2 = GetMediaInfo(url, mediainfo.type)
-	#Log(str(mediainfo2))
 	
+	# Did we get get any metadata back from meta data providers?
 	if (mediainfo2 is None or mediainfo2.id is None):
+		# If not, use the information we've collected along the way.
 		mediainfo2 = mediainfo
+	else:
+		# We did, but do we know more than the meta data provider?
+		# Copy some values across from what we've been passed from LMWT / have built up
+		# as we're navigating if meta provider couldn't find data.
+		if mediainfo2.poster is None:
+			mediainfo2.poster = mediainfo.poster
 		
-	# Copy some values across from what we've been passed if meta provider couldn't find data.
-	if mediainfo2.poster is None:
-		mediainfo2.poster = mediainfo.poster
+		if mediainfo2.show_name is None:
+			mediainfo2.show_name = mediainfo.show_name
+			
+		if mediainfo2.season is None:
+			mediainfo2.season = mediainfo.season
+			
+		if mediainfo2.title is None:
+			mediainfo2.title = item_name
 	
+	providerURLs = []
 	for item in GetSources(url):
 	
 		if (item['quality'] == "sponsored"):
 			continue
 					
 		mediaItem = GetItemForSource(mediainfo=mediainfo2, item=item)
-		if mediaItem is not None:
-			mc.add(mediaItem)
 		
-	if len(mc.objects) == 0:
-		mc.header = "No Enabled Sources Found"
-		mc.message = ""
-	return mc
+		if mediaItem is not None:
+			oc.add(mediaItem)
+			providerURLs.append(mediaItem.url)
+					
+	if len(oc.objects) == 0:
+		oc.header = "No Enabled Sources Found"
+		oc.message = ""
+	else:
+		# Add this to the recent items list so we can cross reference that
+		# with any playback events.
+		if (Data.Exists(BROWSED_ITEMS_KEY)):
+			browsedItems =  cerealizer.loads(Data.Load(BROWSED_ITEMS_KEY))
+		else:
+			browsedItems = BrowsedItems()
+
+		
+		browsedItems.add(mediainfo2, providerURLs, path)
+		
+		Data.Save(BROWSED_ITEMS_KEY, cerealizer.dumps(browsedItems))
+		
+		#Log("Browsed items: " + str(browsedItems))
+		
+	return oc
 	
 ####################################################################################################
 
-def SearchResultsMenu(sender, query, type):
+def SearchResultsMenu(query, type, parent_name=None):
 
-	mc = MediaContainer(noCache=True, viewGroup = "ListInfo", title1=sender.title2, title2="Search")
+	mc = MediaContainer(noCache=True, viewGroup = "ListInfo", title1=parent_name, title2="Search")
 
 	func_name = TVSeasonMenu
 	if (type=="movies"):
@@ -589,9 +668,11 @@ def SearchResultsMenu(sender, query, type):
 					summary= "",
 					thumb= item.poster,
 					art="",
-					ratings= item.rating
+					ratings= item.rating,
+					parent_name=oc.title2,
 				),
 				mediainfo = item,
+				url=None,
 			)
 		)
 		
@@ -602,7 +683,162 @@ def SearchResultsMenu(sender, query, type):
 			"Zero Matches",
 			"No results found for your query \"" + query + "\""
 		)
+		
+####################################################################################################
 
+def HistoryMenu(parent_name=None):
+
+	oc = ObjectContainer(no_cache=True, view_group="InfoList", title1=parent_name, title2="Recently Watched")
+	
+	# If, no previously viewing history, abort.
+	if (Data.Exists(VIEW_HIST_KEY)):
+		
+		# Get viewing history...
+		history = cerealizer.loads(Data.Load(VIEW_HIST_KEY))
+		items = history.get(Prefs['watched_grouping'], int(Prefs['watched_amount']))
+		
+		# For each viewed video. 
+		for item in items:
+			
+			mediainfo = item[0]
+			navpath = item[1]
+			
+			title = '' 
+			if (mediainfo.type == 'tv'):
+				
+				# If the item is a TV show, come up with sensible display info
+				# that matches the requested grouping.
+				summary = None
+				if (mediainfo.show_name is not None):
+					title = mediainfo.show_name
+					
+				if (
+					(Prefs['watched_grouping'] == 'Season' or Prefs['watched_grouping'] == 'Episode') and
+					mediainfo.season is not None
+				):
+					title = title + ' - ' + mediainfo.season
+					
+				if (Prefs['watched_grouping'] == 'Episode'):
+					title = title + ' - ' + mediainfo.title
+					summary = mediainfo.summary
+					
+			else:
+				title = mediainfo.title
+				summary = mediainfo.summary
+				
+			oc.add(
+				PopupDirectoryObject(
+					key=Callback(HistoryNavPathMenu,mediainfo=mediainfo,navpath=navpath,parent_name=oc.title1),
+					title=title,
+					summary=summary,
+					art=mediainfo.background,
+					thumb= mediainfo.poster,
+					duration=mediainfo.duration,
+					
+				)
+			)
+			
+	oc.add(
+		DirectoryObject(
+			key=Callback(HistoryClearMenu),
+			title="Clear Viewing History",
+			tagline="Remove all items from your viewing history.",
+			summary="Remove all items from your viewing history.\nYou can also disable items being added to your Recently Watched list from the Preferences menu",
+		)
+	)
+		
+	return oc
+
+####################################################################################################
+
+def HistoryClearMenu():
+
+	Data.Remove(VIEW_HIST_KEY)
+	Data.Remove(BROWSED_ITEMS_KEY)
+	
+	oc = HistoryMenu()
+	oc.replace_parent = True
+	return oc
+	
+def HistoryAddToFavouritesMenu(mediainfo=None, parent_name=None):
+
+	oc = ObjectContainer(title1=parent_name, title2="Recently Watched")
+	oc.header = "-- FIXME --"
+	oc.message = "Implement me!"
+	
+	return oc
+	
+####################################################################################################
+
+def HistoryNavPathMenu(mediainfo, navpath, parent_name):
+
+	oc = ObjectContainer(title1=parent_name, title2="Recently Watched")
+	
+	# Grab a copy of the path we can update as we're iterating through it.
+	path = list(navpath)
+	
+	# The path as stored in the system is top down. However, we're going to
+	# display it in reverse order (bottom up), so match that.
+	path.reverse()
+	path.pop(0)
+		
+	for item in reversed(navpath):
+	
+		# The order in which we're processing the path (bottom up) isn't the 
+		# same as how it was navigated (top down). So, reverse it to
+		# put in the right order to pass on to the normal navigation functions.
+		ordered_path = list(path)
+		ordered_path.reverse()
+	
+		# Depending on the types of args present, we may end up calling different methods.
+		#
+		# If we have an item URL, take user to provider list for that URL
+		if ("url" in item):
+			if (mediainfo.type == 'tv' and Prefs['watched_grouping'] != 'Episode'):
+				continue
+			else:
+				callback = Callback(
+					SourcesMenu, mediainfo=mediainfo, url=item['url'], item_name=None, path=ordered_path, parent_name=oc.title2)
+			
+		# If we have a show URL, take user to season listing for that show
+		elif ("show_url" in item):
+			callback = Callback(TVSeasonMenu, mediainfo=mediainfo, url=item['show_url'], item_name=mediainfo.show_name, path=ordered_path, parent_name=oc.title2)
+		
+		# If we have a season URL, take user to episode listing for that season.
+		elif ("season_url" in item):
+			if (Prefs['watched_grouping'] == 'Season' or Prefs['watched_grouping'] == 'Episode'):
+				callback = Callback(TVSeasonShowsMenu, mediainfo=mediainfo, season_url=item['season_url'], item_name=mediainfo.season, path=ordered_path, parent_name=oc.title2)
+			else:
+				continue
+		
+		# If we have a type but no sort, this is first level menu
+		elif ("type" in item and "sort" not in item):
+			callback = Callback(TypeMenu, type=item['type'], genre=item['genre'], path=ordered_path, parent_name=oc.title2)
+
+		# Must be item list.
+		else:
+			callback = Callback(ItemsMenu, type=item['type'], genre=item['genre'], sort=item['sort'], alpha=item['alpha'], section_name=item['section_name'], start_page=0, path=ordered_path, parent_name=oc.title2)
+		
+		oc.add(
+			DirectoryObject(
+				key=callback,
+				title=item['elem']
+			)
+		)
+		
+		# The next item we're processing is one up in the path, so update path to reflect that.
+		if (len(path) > 0):
+			path.pop(0)
+			
+	oc.add(
+		DirectoryObject(
+			key=Callback(HistoryAddToFavouritesMenu),
+			title="Add to Favourites"
+		)
+	)
+	
+	return oc
+	
 ####################################################################################################
 # PAGE PARSING
 ####################################################################################################
@@ -631,7 +867,7 @@ def GetMediaInfo(url, type):
 		info = {}
 		info['Description:'] = info_div.find('td', { 'colspan': '2' }).text
 		
-		# Then, ratinga....
+		# Then, ratings....
 		info['Rating:'] = info_div.find('li', 'current-rating').text
 		
 		# Extract out any other info.
@@ -649,12 +885,14 @@ def GetMediaInfo(url, type):
 			'Air Date:' : ['releasedate', lambda x: datetime.strptime(x, '%B %d, %Y')],
 			'Runtime:' : ['duration', lambda x: int(re.search("(\d*)", x).group(0)) * 60 * 1000 if int(re.search("(\d*)", x).group(0)) * 60 * 1000 < sys.maxint else 0],
 			'Rating:' : ['rating', lambda x: float(re.search("([\d\.]+)", x).group(0)) * 2],
+			'Title:': ['title', lambda x: decode_htmlentities(x)],
 		}
 		
 		# For each extracted item from LMWT...
 		for lmwt_item in info.keys():
 		
 			#Log("Processing: " + lmwt_item)
+			
 			# Look for matching entry in map...
 			if lmwt_item not in item_map.keys():
 				continue
@@ -701,14 +939,14 @@ def GetSources(url):
 		source = {}
 		
 		# Extract out source URL
-		source['url'] = str(item.find('span', { 'class' : 'movie_version_link' }).a['href'])
+		source['url'] = str(item.find('span', { 'class' : 'movie_version_link' }).a['href'][1:])
 		
 		# Extract out source name.
 		source['name'] = str(item.find('span', { 'class' : 'movie_version_link' }).a.string)
 		if (source['name'].lower().find('trailer') >= 0):
 			continue
 		
-		#�Extract out source quality.
+		# Extract out source quality.
 		quality_elem = item.find('span', { 'class': re.compile('quality_.*') })
 		quality = re.search("quality_(.*)", quality_elem['class']).group(1)
 		source['quality'] = quality
@@ -776,7 +1014,7 @@ def GetTVSeasonShows(url):
 			title = title + " " + str(item.a.span.string).strip()
 		
 		show.append(title)
-		show.append(item.a['href'])
+		show.append(item.a['href'][1:])
 		
 		shows.append(show)
 		
@@ -785,7 +1023,7 @@ def GetTVSeasonShows(url):
 
 ####################################################################################################
 
-def GetTVSeasons(mediainfo):
+def GetTVSeasons(url):
 
 	# The description meta header for some shows inserts random double quotes in the
 	# content which breaks the parsing of the page. Work around that by simply
@@ -794,13 +1032,13 @@ def GetTVSeasons(mediainfo):
 	soupMassage = copy.copy(BeautifulSoup.MARKUP_MASSAGE)
 	soupMassage.extend(headMassage)	
 	
-	soup = BeautifulSoup(HTTP.Request(LMWT_URL + mediainfo.id).content, markupMassage=soupMassage)
+	soup = BeautifulSoup(HTTP.Request(LMWT_URL + url).content, markupMassage=soupMassage)
 
 	items = []
 
 	for item in soup.find("div", { 'id': 'first' }).findAll('h2'):
 	
-		items.append([str(item.a.string), item.a['href']])
+		items.append([str(item.a.string), item.a['href'][1:]])
 		
 	return items
 
@@ -829,8 +1067,9 @@ def GetItems(type, genre = None, sort = None, alpha = None, pages = 5, start_pag
 			title_alt = item.find('a')['title']
 			res.title = re.search("Watch (.*)", title_alt).group(1)
 			
+			
 			# Extract out URL
-			res.id = item.a['href']
+			res.id = item.a['href'][1:]
 			
 			# Extract out thumb
 			res.poster = item.find('img')['src']
@@ -853,7 +1092,7 @@ def GetItems(type, genre = None, sort = None, alpha = None, pages = 5, start_pag
 
 def GetURL(type, genre = None, sort = None, page_num = None, alpha = None):
 
-	url = LMWT_URL + "/?" + type + "="
+	url = LMWT_URL + "?" + type + "="
 	
 	if (sort is not None):
 		url = url + "&sort=" + sort
@@ -923,20 +1162,27 @@ def GetSearchResults(query=None,type=None,):
 # PROVIDER SPECIFIC CODE
 ####################################################################################################
 
+# Params:
+#   mediainfo: A MediaInfo item for the current LMWT item being viewed (either a movie or single episode).
+#   item:  A dictionary containing information for the selected source for the LMWT item being viewed.
 def GetItemForSource(mediainfo, item):
 	
 	providerInfoURL = "http://providerinfo." + item['provider_name'] + "/?plugin=lmwt"
-			
+	
 	# See if provider is supported.
+	#
+	# Note that we cheat and assume that if our special URL has been modified then that must mean
+	# that there is at least one URL Service that supports this specific provider. Because
+	# of the use of the special providerinfo URL which only the LMWT URL Services know about, 
+	# it all works out quite well in practice.
 	providerInfo = URLService.NormalizeURL(providerInfoURL)
 	
 	if (providerInfo != providerInfoURL):
 	
-		# Extract out query string which represents the provider's arguments (if any...)
-		url_qs = urlparse(providerInfo).query
+		info_url = URLService.NormalizeURL(LMWT_URL + item['url'])
 		
 		return VideoClipObject(
-			url = LMWT_URL + item['url'] + "&provider_args=" + urllib.quote_plus(url_qs),
+			url = info_url,
 			title = item['name'] + " - " + item['provider_name'],
 			summary=mediainfo.summary,
 			art=mediainfo.background,
@@ -948,7 +1194,8 @@ def GetItemForSource(mediainfo, item):
 			originally_available_at=mediainfo.releasedate,
 			genres=mediainfo.genres
 		)
-	
+		
+		
 	else:
 	
 		if (Prefs['show_unsupported']):
@@ -962,17 +1209,59 @@ def GetItemForSource(mediainfo, item):
 			
 		else:
 			return
-			
-		
-						
+
+	
 ####################################################################################################
 	
 def PlayVideoNotSupported(mediainfo, url):
 
 	return ObjectContainer(
 		header='Provider is either not currently supported or has been disabled in preferences...',
-		message=''
+		message='',
 	)
+	
+
+@route('/video/lmwt/playback/{url}')
+def PlaybackStarted(url):
+
+	# If user doesn't want to save recently watched items, abort.
+	if (Prefs['watched_amount'] == 'Disabled'):
+		return ""
+		
+	# If we don't have a list of items user has recently browsed, abort.
+	if (not Data.Exists(BROWSED_ITEMS_KEY)):
+		return ""
+	
+	# Get list of items user has recently looked at.
+	browsedItems =  cerealizer.loads(Data.Load(BROWSED_ITEMS_KEY))
+	
+	# Get clean copy of URL user has played.
+	decoded_url = base64.urlsafe_b64decode(str(url))
+	
+	# See if the URL being played is on our recently browsed list.
+	info = browsedItems.get(decoded_url)
+	
+	if (info is None):
+		return ""
+		
+	# Get the bits of info out of the recently browsed item.
+	mediainfo = info[0]
+	path = info[1]
+	
+	# Load up viewing history, and add item to it.
+	if (Data.Exists(VIEW_HIST_KEY)):
+		hist = cerealizer.loads(Data.Load(VIEW_HIST_KEY))
+	else:
+		hist = ViewedItems()
+		
+	hist.add(mediainfo, path, int(Prefs['watched_amount']))
+	
+	Data.Save(VIEW_HIST_KEY, cerealizer.dumps(hist))
+	
+	#Log("Playback started on item:" + str(mediainfo))
+	#Log("Viewing history: " + str(hist))
+	
+	return ""
 	
 ###############################################################################
 # UTIL METHODS
