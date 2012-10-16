@@ -50,6 +50,7 @@ MOVIE_ICON='icon-movie.png'
 MOVIE_HD_ICON='icon-movie-hd.png'
 TV_ICON='icon-tv.png'
 AZ_ICON='icon-az.png'
+FEATURED_ICON='icon-featured.png'
 STANDUP_ICON='icon-standup.png'
 GENRE_BASE='icon-genre'
 GENRE_ICON=GENRE_BASE + '.png'
@@ -240,6 +241,25 @@ def TypeMenu(type=None, genre=None, path=[], parent_name=None):
 			tagline="",
 			summary="List of most popular " + type_desc,
 			thumb=R("Popular.png"),
+			art=R(ART)	
+		)
+	)
+
+	oc.add(
+		DirectoryObject(
+			key=Callback(
+				ItemsMenu,
+				type=type,
+				genre=genre,
+				sort="featured",
+				section_name="Featured",
+				path=path,
+				parent_name=oc.title2,
+			),
+			title="Featured",
+			tagline="",
+			summary="List of featured " + type_desc,
+			thumb=R(FEATURED_ICON),
 			art=R(ART)	
 		)
 	)
