@@ -761,9 +761,8 @@ def HistoryMenu(parent_name=None):
 	oc.add(
 		DirectoryObject(
 			key=Callback(HistoryClearMenu),
-			title="Clear Viewing History",
-			tagline="Remove all items from your viewing history.",
-			summary="Remove all items from your viewing history.\nYou can also disable items being added to your Recently Watched list from the Preferences menu",
+			title=L("HistoryClearTitle"),
+			summary=L("HistoryClearSummary"),
 		)
 	)
 		

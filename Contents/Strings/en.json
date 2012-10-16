@@ -13,6 +13,9 @@
     "HistoryTitle":"Recently Watched",
 	"HistorySubtitle":"Access recently watched items",
 	"HistorySummary":"Quick access to items you have recently watched.",
+
+	"HistoryClearTitle":"Clear Recently Watched",	
+	"HistoryClearSummary":"You can also disable items being added to your Recently Watched list from the Preferences menu",
 			
     "PrefsTitle":"Preferences",
     "PrefsSubtitle":"Set your preferences here",
