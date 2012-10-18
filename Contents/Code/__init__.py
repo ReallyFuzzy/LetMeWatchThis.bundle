@@ -21,8 +21,9 @@ cerealizer.register(ViewedItems)
 VIDEO_PREFIX = "/video/lmwt"
 NAME = L('Title')
 
-VERSION = "12.10.16.1"
+VERSION = "12.10.16.2"
 VERSION_URLS = {
+	"12.10.16.2": "http://bit.ly/R7ZieU",
 	"12.10.16.1": "http://bit.ly/R7ZieU",
 	"12.08.01.1": "http://bit.ly/NUNueE",
 	"12.07.25.1": "http://bit.ly/OZBBRR",
@@ -364,6 +365,7 @@ def TypeMenu(type=None, genre=None, path=[], parent_name=None):
 				key=Callback(
 					SearchResultsMenu,
 					type=type,
+					parent_name=oc.title2,
 				),
 				title="Search",
 				tagline="Search for a title using this feature",
@@ -673,37 +675,30 @@ def SourcesMenu(mediainfo=None, url=None, item_name=None, path=[], parent_name=N
 
 def SearchResultsMenu(query, type, parent_name=None):
 
-	mc = MediaContainer(noCache=True, viewGroup = "ListInfo", title1=parent_name, title2="Search")
+	oc = ObjectContainer(no_cache=True, view_group = "InfoList", title1=parent_name, title2="Search (" + query + ")")
 
 	func_name = TVSeasonMenu
 	if (type=="movies"):
 		func_name = SourcesMenu
 		
 	for item in GetSearchResults(query=query, type=type):
-		mc.Append(
-			Function(
-				DirectoryItem(
-					func_name,
-					item.title,
-					subtitle= "",
-					summary= "",
-					thumb= item.poster,
-					art="",
-					ratings= item.rating,
-					parent_name=oc.title2,
-				),
-				mediainfo = item,
-				url=None,
+		oc.add(
+			DirectoryObject(
+				key=Callback(func_name, mediainfo=item, url=item.id, parent_name=oc.title2),
+				title=item.title,
+				tagline="",
+				summary="",
+				thumb=item.poster,
+				art="",
 			)
 		)
 		
-	if(len(mc) >0) :
-		return mc
-	else:
-		return MessageContainer(
-			"Zero Matches",
-			"No results found for your query \"" + query + "\""
-		)
+	if (len(oc) <= 0):
+		oc.header = "Zero Matches"
+		oc.message = "No results found for your query \"" + query + "\""
+
+	return oc
+
 		
 ####################################################################################################
 
@@ -1161,7 +1156,7 @@ def GetSearchResults(query=None,type=None,):
 		res.title = re.search("Watch (.*)", title_alt).group(1)
 		
 		# Extract out URL
-		res.id = item.a['href']
+		res.id = item.a['href'][1:]
 		
 		# Extract out thumb
 		res.poster = item.find('img')['src']
