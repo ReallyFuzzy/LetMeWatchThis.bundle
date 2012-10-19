@@ -467,8 +467,12 @@ def ItemsMenu(
 	
 	func_name = TVSeasonMenu
 	
+	hist = None
+	
 	if (type=="movies"):
 		func_name = SourcesMenu
+		if (need_watched_indicator(type)):
+			hist = get_watched_history()
 		
 	if (start_page > 0):
 		oc.add(
@@ -494,6 +498,10 @@ def ItemsMenu(
 	for item in items:
 	
 		#Log(item)
+		indicator = ''
+		if (hist and not hist.has_been_watched(item.id)):
+			indicator = '  O'
+			
 		oc.add(
 			DirectoryObject(
 				key=Callback(
@@ -503,7 +511,7 @@ def ItemsMenu(
 					path=path,
 					parent_name=oc.title2,
 				),
-				title=item.title,
+				title=item.title + indicator,
 				tagline="",
 				summary="",
 				thumb= item.poster,
@@ -583,8 +591,20 @@ def TVSeasonShowsMenu(mediainfo=None, season_url=None,item_name=None, path=[], p
 	
 	oc = ObjectContainer(view_group="InfoList", title1=parent_name, title2=item_name)
 	
+	# Get Viewing history if we need an indicator.
+	hist = None
+	if (need_watched_indicator('tv')):
+		hist = get_watched_history()
+	
 	for item in GetTVSeasonShows("/" + season_url):
 	
+		indicator = ''
+		Log(hist)
+		if (hist):
+			watched = hist.has_been_watched(item[1])
+			if (not watched):
+				indicator = '  O'
+		
 		oc.add(
 			DirectoryObject(
 				key=Callback(
@@ -595,7 +615,7 @@ def TVSeasonShowsMenu(mediainfo=None, season_url=None,item_name=None, path=[], p
 					path=path,
 					parent_name=oc.title2,
 				),
-				title=item[0],
+				title=item[0] + indicator ,
 				tagline=mediainfo.title,
 				summary="",
 				thumb= mediainfo.poster,
@@ -706,53 +726,55 @@ def HistoryMenu(parent_name=None):
 
 	oc = ObjectContainer(no_cache=True, view_group="InfoList", title1=parent_name, title2="Recently Watched")
 	
+	history = get_watched_history()
+	
 	# If, no previously viewing history, abort.
-	if (Data.Exists(VIEW_HIST_KEY)):
+	if (history is None):
+		return
 		
-		# Get viewing history...
-		history = cerealizer.loads(Data.Load(VIEW_HIST_KEY))
-		items = history.get(Prefs['watched_grouping'], int(Prefs['watched_amount']))
+	# Get viewing history...
+	items = history.get(Prefs['watched_grouping'], int(Prefs['watched_amount']))
+	
+	# For each viewed video. 
+	for item in items:
 		
-		# For each viewed video. 
-		for item in items:
+		mediainfo = item[0]
+		navpath = item[1]
+		
+		title = '' 
+		if (mediainfo.type == 'tv'):
 			
-			mediainfo = item[0]
-			navpath = item[1]
-			
-			title = '' 
-			if (mediainfo.type == 'tv'):
+			# If the item is a TV show, come up with sensible display info
+			# that matches the requested grouping.
+			summary = None
+			if (mediainfo.show_name is not None):
+				title = mediainfo.show_name
 				
-				# If the item is a TV show, come up with sensible display info
-				# that matches the requested grouping.
-				summary = None
-				if (mediainfo.show_name is not None):
-					title = mediainfo.show_name
-					
-				if (
-					(Prefs['watched_grouping'] == 'Season' or Prefs['watched_grouping'] == 'Episode') and
-					mediainfo.season is not None
-				):
-					title = title + ' - ' + mediainfo.season
-					
-				if (Prefs['watched_grouping'] == 'Episode'):
-					title = title + ' - ' + mediainfo.title
-					summary = mediainfo.summary
-					
-			else:
-				title = mediainfo.title
+			if (
+				(Prefs['watched_grouping'] == 'Season' or Prefs['watched_grouping'] == 'Episode') and
+				mediainfo.season is not None
+			):
+				title = title + ' - ' + mediainfo.season
+				
+			if (Prefs['watched_grouping'] == 'Episode'):
+				title = title + ' - ' + mediainfo.title
 				summary = mediainfo.summary
 				
-			oc.add(
-				PopupDirectoryObject(
-					key=Callback(HistoryNavPathMenu,mediainfo=mediainfo,navpath=navpath,parent_name=oc.title1),
-					title=title,
-					summary=summary,
-					art=mediainfo.background,
-					thumb= mediainfo.poster,
-					duration=mediainfo.duration,
-					
-				)
+		else:
+			title = mediainfo.title
+			summary = mediainfo.summary
+			
+		oc.add(
+			PopupDirectoryObject(
+				key=Callback(HistoryNavPathMenu,mediainfo=mediainfo,navpath=navpath,parent_name=oc.title1),
+				title=title,
+				summary=summary,
+				art=mediainfo.background,
+				thumb= mediainfo.poster,
+				duration=mediainfo.duration,
+				
 			)
+		)
 			
 	oc.add(
 		DirectoryObject(
@@ -789,15 +811,22 @@ def HistoryNavPathMenu(mediainfo, navpath, parent_name):
 
 	oc = ObjectContainer(title1=parent_name, title2="Recently Watched")
 	
+	Log(navpath)
 	# Grab a copy of the path we can update as we're iterating through it.
 	path = list(navpath)
 	
 	# The path as stored in the system is top down. However, we're going to
 	# display it in reverse order (bottom up), so match that.
 	path.reverse()
-	path.pop(0)
 		
 	for item in reversed(navpath):
+	
+		# When the users select this option, the selected option will automatically
+		# be re-added to the path by the called menu function. So, remove it now so
+		# we don't get duplicates.
+		if (len(path) > 0):
+			path.pop(0)
+			
 	
 		# The order in which we're processing the path (bottom up) isn't the 
 		# same as how it was navigated (top down). So, reverse it to
@@ -822,6 +851,7 @@ def HistoryNavPathMenu(mediainfo, navpath, parent_name):
 		# If we have a season URL, take user to episode listing for that season.
 		elif ("season_url" in item):
 			if (Prefs['watched_grouping'] == 'Season' or Prefs['watched_grouping'] == 'Episode'):
+				Log(path)
 				callback = Callback(TVSeasonShowsMenu, mediainfo=mediainfo, season_url=item['season_url'], item_name=mediainfo.season, path=ordered_path, parent_name=oc.title2)
 			else:
 				continue
@@ -841,10 +871,7 @@ def HistoryNavPathMenu(mediainfo, navpath, parent_name):
 			)
 		)
 		
-		# The next item we're processing is one up in the path, so update path to reflect that.
-		if (len(path) > 0):
-			path.pop(0)
-			
+		
 	oc.add(
 		DirectoryObject(
 			key=Callback(HistoryAddToFavouritesMenu),
@@ -1264,10 +1291,7 @@ def PlaybackStarted(url):
 	path = info[1]
 	
 	# Load up viewing history, and add item to it.
-	if (Data.Exists(VIEW_HIST_KEY)):
-		hist = cerealizer.loads(Data.Load(VIEW_HIST_KEY))
-	else:
-		hist = ViewedItems()
+	hist = get_watched_history()
 		
 	hist.add(mediainfo, path, int(Prefs['watched_amount']))
 	
@@ -1305,4 +1329,26 @@ def substitute_entity(match):
 def decode_htmlentities(string):
 	entity_re = re.compile(r'&(#?)(x?)(\d{1,5}|\w{1,8});')
 	return entity_re.subn(substitute_entity, string)[0]
+
+###############################################################################
+# 
+def need_watched_indicator(type):
+
+	if (type == 'tv' and Prefs['watched_indicator'] != 'Disabled'):
+		return True
+		
+	if (type == 'movies' and Prefs['watched_indicator'] == 'All'):
+		return True
 	
+	return False
+
+###############################################################################
+#
+def get_watched_history():
+
+	if (Data.Exists(VIEW_HIST_KEY)):
+		hist = cerealizer.loads(Data.Load(VIEW_HIST_KEY))
+	else:
+		hist = ViewedItems()
+		
+	return hist
