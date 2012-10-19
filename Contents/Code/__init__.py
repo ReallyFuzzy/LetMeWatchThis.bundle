@@ -473,6 +473,9 @@ def ItemsMenu(
 		func_name = SourcesMenu
 		if (need_watched_indicator(type)):
 			hist = get_watched_history()
+			# Don't cache ourselves in case the user watches a new item.
+			# If that happens, we need to rebuild the whole list.
+			oc.no_cache = True
 		
 	if (start_page > 0):
 		oc.add(
@@ -588,12 +591,14 @@ def TVSeasonShowsMenu(mediainfo=None, season_url=None,item_name=None, path=[], p
 	
 	if (item_name is not None):
 		mediainfo.season = item_name
+
+	need_indicator = need_watched_indicator('tv')
 	
-	oc = ObjectContainer(view_group="InfoList", title1=parent_name, title2=item_name)
+	oc = ObjectContainer(no_cache=need_indicator, view_group="InfoList", title1=parent_name, title2=item_name)
 	
 	# Get Viewing history if we need an indicator.
 	hist = None
-	if (need_watched_indicator('tv')):
+	if (need_indicator):
 		hist = get_watched_history()
 	
 	for item in GetTVSeasonShows("/" + season_url):
