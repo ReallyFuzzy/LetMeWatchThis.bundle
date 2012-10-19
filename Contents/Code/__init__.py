@@ -502,8 +502,11 @@ def ItemsMenu(
 	
 		#Log(item)
 		indicator = ''
-		if (hist and not hist.has_been_watched(item.id)):
-			indicator = '  O'
+		if (hist):
+			if (hist.has_been_watched(item.id)):
+				indicator = '    '
+			else:
+				indicator =  u"\u00F8" + "  "
 			
 		oc.add(
 			DirectoryObject(
@@ -514,7 +517,7 @@ def ItemsMenu(
 					path=path,
 					parent_name=oc.title2,
 				),
-				title=item.title + indicator,
+				title=indicator + item.title,
 				tagline="",
 				summary="",
 				thumb= item.poster,
@@ -604,11 +607,13 @@ def TVSeasonShowsMenu(mediainfo=None, season_url=None,item_name=None, path=[], p
 	for item in GetTVSeasonShows("/" + season_url):
 	
 		indicator = ''
-		Log(hist)
+		
 		if (hist):
 			watched = hist.has_been_watched(item[1])
-			if (not watched):
-				indicator = '  O'
+			if (watched):
+				indicator = '    '
+			else:
+				indicator =  u"\u00F8" + "  "
 		
 		oc.add(
 			DirectoryObject(
@@ -620,7 +625,7 @@ def TVSeasonShowsMenu(mediainfo=None, season_url=None,item_name=None, path=[], p
 					path=path,
 					parent_name=oc.title2,
 				),
-				title=item[0] + indicator ,
+				title=indicator + item[0],
 				tagline=mediainfo.title,
 				summary="",
 				thumb= mediainfo.poster,
