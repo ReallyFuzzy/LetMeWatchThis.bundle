@@ -1288,12 +1288,13 @@ def PlaybackStarted(url):
 	browsedItems =  cerealizer.loads(Data.Load(BROWSED_ITEMS_KEY))
 	
 	# Get clean copy of URL user has played.
-	decoded_url = base64.urlsafe_b64decode(str(url))
+	decoded_url = String.Decode(str(url))
 	
 	# See if the URL being played is on our recently browsed list.
 	info = browsedItems.get(decoded_url)
 	
 	if (info is None):
+		Log("****** ERROR: Watching Item which hasn't been browsed to")
 		return ""
 		
 	# Get the bits of info out of the recently browsed item.
