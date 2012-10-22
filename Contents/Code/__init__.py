@@ -679,7 +679,8 @@ def SourcesMenu(mediainfo=None, url=None, item_name=None, path=[], parent_name=N
 		
 		if mediaItem is not None:
 			oc.add(mediaItem)
-			providerURLs.append(mediaItem.url)
+			if (hasattr(mediaItem, url)):
+				providerURLs.append(mediaItem.url)
 					
 	if len(oc.objects) == 0:
 		oc.header = "No Enabled Sources Found"
@@ -1219,48 +1220,44 @@ def GetSearchResults(query=None,type=None,):
 #   item:  A dictionary containing information for the selected source for the LMWT item being viewed.
 def GetItemForSource(mediainfo, item):
 	
-	providerInfoURL = "http://providerinfo." + item['provider_name'] + "/?plugin=lmwt"
-	
 	# See if provider is supported.
-	#
-	# Note that we cheat and assume that if our special URL has been modified then that must mean
-	# that there is at least one URL Service that supports this specific provider. Because
-	# of the use of the special providerinfo URL which only the LMWT URL Services know about, 
-	# it all works out quite well in practice.
-	providerInfo = URLService.NormalizeURL(providerInfoURL)
+	providerURL = URLService.NormalizeURL(LMWT_URL + item['url'])
+	providerSupported = URLService.ServiceIdentifierForURL(providerURL) is not None
 	
-	if (providerInfo != providerInfoURL):
+	if (providerSupported):
 	
-		info_url = URLService.NormalizeURL(LMWT_URL + item['url'])
+		# See if we need to hide provider....
+		providerInfoURL = "http://providerinfo." + item['provider_name'] + "/?plugin=lmwt"
+		providerVisible =  'visible=true' in URLService.NormalizeURL(providerInfoURL)
 		
-		return VideoClipObject(
-			url = info_url,
-			title = item['name'] + " - " + item['provider_name'],
-			summary=mediainfo.summary,
-			art=mediainfo.background,
-			thumb= mediainfo.poster,
-			rating = float(mediainfo.rating),
-			duration=mediainfo.duration,
-			source_title = item['provider_name'] ,
-			year=mediainfo.year,
-			originally_available_at=mediainfo.releasedate,
-			genres=mediainfo.genres
-		)
+		if (providerVisible):
 		
-		
-	else:
-	
-		if (Prefs['show_unsupported']):
-			return DirectoryObject(
-				key = Callback(PlayVideoNotSupported, mediainfo = mediainfo, url = item['url']),
-				title = item['name'] + " - " + item['provider_name'] + " (Not playable)",
-				summary= mediainfo.summary,
+			return VideoClipObject(
+				url=providerURL,
+				title=item['name'] + " - " + item['provider_name'],
+				summary=mediainfo.summary,
 				art=mediainfo.background,
 				thumb= mediainfo.poster,
+				rating = float(mediainfo.rating),
+				duration=mediainfo.duration,
+				source_title = item['provider_name'] ,
+				year=mediainfo.year,
+				originally_available_at=mediainfo.releasedate,
+				genres=mediainfo.genres
 			)
-			
-		else:
-			return
+		
+	# The only way we can get down here is if the provider wasn't supported or
+	# the provider was supported but not visible. Maybe user still wants to see them?
+	if (Prefs['show_unsupported']):
+		return DirectoryObject(
+			key = Callback(PlayVideoNotSupported, mediainfo = mediainfo, url = item['url']),
+			title = item['name'] + " - " + item['provider_name'] + " (Not playable)",
+			summary= mediainfo.summary,
+			art=mediainfo.background,
+			thumb= mediainfo.poster,
+		)
+	else:
+		return
 
 	
 ####################################################################################################
