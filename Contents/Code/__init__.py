@@ -709,6 +709,8 @@ def SearchResultsMenu(query, type, parent_name=None):
 
 	oc = ObjectContainer(no_cache=True, view_group = "InfoList", title1=parent_name, title2="Search (" + query + ")")
 
+	path = [ { 'elem':'Search (' + query + ')', 'query': query }]
+	
 	func_name = TVSeasonMenu
 	if (type=="movies"):
 		func_name = SourcesMenu
@@ -716,7 +718,7 @@ def SearchResultsMenu(query, type, parent_name=None):
 	for item in GetSearchResults(query=query, type=type):
 		oc.add(
 			DirectoryObject(
-				key=Callback(func_name, mediainfo=item, url=item.id, parent_name=oc.title2),
+				key=Callback(func_name, mediainfo=item, url=item.id, path=path, parent_name=oc.title2),
 				title=item.title,
 				tagline="",
 				summary="",
@@ -848,8 +850,14 @@ def HistoryNavPathMenu(mediainfo, navpath, parent_name):
 	
 		# Depending on the types of args present, we may end up calling different methods.
 		#
+		
+		# If we have a query term, take user to search results.
+		if ("query" in item):
+			callback = Callback(
+				SearchResultsMenu, query=item['query'], type=mediainfo.type, parent_name=oc.title2
+			)
 		# If we have an item URL, take user to provider list for that URL
-		if ("url" in item):
+		elif ("url" in item):
 			if (mediainfo.type == 'tv' and Prefs['watched_grouping'] != 'Episode'):
 				continue
 			else:
