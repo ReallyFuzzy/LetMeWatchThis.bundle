@@ -680,7 +680,7 @@ def SourcesMenu(mediainfo=None, url=None, item_name=None, path=[], parent_name=N
 		
 		if mediaItem is not None:
 			oc.add(mediaItem)
-			if (hasattr(mediaItem, url)):
+			if (hasattr(mediaItem, 'url')):
 				providerURLs.append(mediaItem.url)
 					
 	if len(oc.objects) == 0:
@@ -1189,6 +1189,8 @@ def GetSearchResults(query=None,type=None,):
 	
 		#Log('Found item: ' + str(item))
 		res = MediaInfo()
+		
+		res.type = type
 		
 		# Extract out title
 		title_alt = item.find('a')['title']
