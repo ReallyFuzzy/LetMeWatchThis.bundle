@@ -21,6 +21,13 @@
         "default": "TV Shows"
     },
     {
+        "id": "favourite_sort",
+        "type": "enum",
+        "label": "Sort Favourties By:",
+        "values": ["Alphabetical", "Date Added"],
+        "default": "Alphabetical"
+    },
+    {
         "id": "versiontracking",
         "type": "bool",
         "label": "Help measure interest in this plugin",

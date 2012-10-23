@@ -12,11 +12,12 @@ from urlparse import urlparse
 
 from BeautifulSoup import BeautifulSoup
 from MetaProviders import DBProvider, MediaInfo
-from RecentItems import BrowsedItems, ViewedItems
+from RecentItems import BrowsedItems, ViewedItems, FavouriteItems
 
 cerealizer.register(MediaInfo)
 cerealizer.register(BrowsedItems)
 cerealizer.register(ViewedItems)
+cerealizer.register(FavouriteItems)
 
 VIDEO_PREFIX = "/video/lmwt"
 NAME = L('Title')
@@ -61,8 +62,9 @@ GENRE_ICON=GENRE_BASE + '.png'
 LMWT_URL = "http://www.1channel.ch/"
 LMWT_SEARCH_URL= "http://www.1channel.ch/index.php"
 
-VIEW_HIST_KEY = "USER_VIEWING_HISTORY"
 BROWSED_ITEMS_KEY = "RECENT_BROWSED_ITEMS"
+WATCHED_ITEMS_KEY = "USER_VIEWING_HISTORY"
+FAVOURITE_ITEMS_KEY = "FAVOURITE_ITEMS"
 
 USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_7_2) AppleWebKit/534.51.22 (KHTML, like Gecko) Version/5.1.1 Safari/534.51.22'
 	
@@ -157,6 +159,18 @@ def VideoMainMenu():
 				tagline=L("HistorySubtitle"),
 				summary=L("HistorySummary"),
 				thumb=R("History.png"),
+			)
+		)
+		
+	favs = load_favourite_items()
+	if (len(favs) > 0):
+		oc.add(
+			DirectoryObject(
+				key=Callback(FavouritesMenu,parent_name=oc.title2,),
+				title=L("Favourites"),
+				tagline=L("FavouritesSubtitle"),
+				summary=L("FavouritesSummary"),
+				thumb=R("Favorite.png"),
 			)
 		)
 	
@@ -473,7 +487,7 @@ def ItemsMenu(
 	if (type=="movies"):
 		func_name = SourcesMenu
 		if (need_watched_indicator(type)):
-			hist = get_watched_history()
+			hist = load_watched_items()
 			# Don't cache ourselves in case the user watches a new item.
 			# If that happens, we need to rebuild the whole list.
 			oc.no_cache = True
@@ -503,12 +517,12 @@ def ItemsMenu(
 	
 		#Log(item)
 		indicator = ''
-		if (hist):
+		if (hist is not None):
 			if (hist.has_been_watched(item.id)):
 				indicator = '    '
 			else:
 				indicator =  u"\u00F8" + "  "
-			
+		
 		oc.add(
 			DirectoryObject(
 				key=Callback(
@@ -603,13 +617,13 @@ def TVSeasonShowsMenu(mediainfo=None, season_url=None,item_name=None, path=[], p
 	# Get Viewing history if we need an indicator.
 	hist = None
 	if (need_indicator):
-		hist = get_watched_history()
+		hist = load_watched_items()
 	
 	for item in GetTVSeasonShows("/" + season_url):
 	
 		indicator = ''
 		
-		if (hist):
+		if (hist is not None):
 			watched = hist.has_been_watched(item[1])
 			if (watched):
 				indicator = '    '
@@ -738,19 +752,12 @@ def SearchResultsMenu(query, type, parent_name=None):
 
 def HistoryMenu(parent_name=None):
 
-	oc = ObjectContainer(no_cache=True, view_group="InfoList", title1=parent_name, title2="Recently Watched")
+	oc = ObjectContainer(no_cache=True, view_group="InfoList", title1=parent_name, title2=L("HistoryTitle"))
 	
-	history = get_watched_history()
-	
-	# If, no previously viewing history, abort.
-	if (history is None):
-		return
-		
-	# Get viewing history...
-	items = history.get(Prefs['watched_grouping'], int(Prefs['watched_amount']))
+	history = load_watched_items().get(Prefs['watched_grouping'], int(Prefs['watched_amount']))
 	
 	# For each viewed video. 
-	for item in items:
+	for item in history:
 		
 		mediainfo = item[0]
 		navpath = item[1]
@@ -804,28 +811,19 @@ def HistoryMenu(parent_name=None):
 
 def HistoryClearMenu():
 
-	Data.Remove(VIEW_HIST_KEY)
+	Data.Remove(WATCHED_ITEMS_KEY)
 	Data.Remove(BROWSED_ITEMS_KEY)
 	
 	oc = HistoryMenu()
 	oc.replace_parent = True
 	return oc
-	
-def HistoryAddToFavouritesMenu(mediainfo=None, parent_name=None):
 
-	oc = ObjectContainer(title1=parent_name, title2="Recently Watched")
-	oc.header = "-- FIXME --"
-	oc.message = "Implement me!"
-	
-	return oc
-	
 ####################################################################################################
 
 def HistoryNavPathMenu(mediainfo, navpath, parent_name):
 
-	oc = ObjectContainer(title1=parent_name, title2="Recently Watched")
+	oc = ObjectContainer(title1=parent_name, title2=L("HistoryTitle"))
 	
-	Log(navpath)
 	# Grab a copy of the path we can update as we're iterating through it.
 	path = list(navpath)
 	
@@ -871,7 +869,6 @@ def HistoryNavPathMenu(mediainfo, navpath, parent_name):
 		# If we have a season URL, take user to episode listing for that season.
 		elif ("season_url" in item):
 			if (Prefs['watched_grouping'] == 'Season' or Prefs['watched_grouping'] == 'Episode'):
-				Log(path)
 				callback = Callback(TVSeasonShowsMenu, mediainfo=mediainfo, season_url=item['season_url'], item_name=mediainfo.season, path=ordered_path, parent_name=oc.title2)
 			else:
 				continue
@@ -890,17 +887,240 @@ def HistoryNavPathMenu(mediainfo, navpath, parent_name):
 				title=item['elem']
 			)
 		)
-		
-		
+	
 	oc.add(
 		DirectoryObject(
-			key=Callback(HistoryAddToFavouritesMenu),
-			title="Add to Favourites"
+			key=Callback(NoOpMenu),
+			title='----------------------'
 		)
 	)
 	
+	# Add to Favourites menu options.
+	# Deal with the fact that the path to be added to favourites is different
+	# based on type of item this is.
+	if (mediainfo.type == 'tv'):
+	
+		# These won't get used and are keyed to a specific episode, so reset them.
+		mediainfo.url = None
+		mediainfo.summary = None
+				
+		# Come up with a nice easy title for later.
+	
+		if (Prefs['watched_grouping'] != 'Show'):
+		
+			mediainfo_season = copy.copy(mediainfo)
+			mediainfo_season.title = mediainfo.show_name + ' - ' + mediainfo.season
+			path = [item for item in navpath if ('season_url' in item or 'show_url' in item)]
+			oc.add(
+				DirectoryObject(
+					key=Callback(HistoryAddToFavouritesMenu, mediainfo=mediainfo_season, path=path, parent_name=oc.title2),
+					title=str(L("HistoryAddToFavouritesItem")) % path[-1]['elem']
+				)
+			)
+			
+		mediainfo.title = mediainfo.show_name
+		mediainfo.season = None
+		path = [item for item in navpath if ('show_url' in item)]
+		
+		if (Prefs['watched_grouping'] == 'Show'):
+			title = L("HistoryAddToFavourites")
+		else:
+			title=str(L("HistoryAddToFavouritesItem")) % path[0]['elem']
+			
+		oc.add(
+			DirectoryObject(
+				key=Callback(HistoryAddToFavouritesMenu, mediainfo=mediainfo, path=[path[0]], parent_name=oc.title2),
+				title=title
+			)
+		)
+		
+	else:
+		oc.add(
+			DirectoryObject(
+				key=Callback(HistoryAddToFavouritesMenu, mediainfo=mediainfo, path=[navpath[-1]], parent_name=oc.title2),
+				title=L("HistoryAddToFavourites")
+			)
+		)
+		
+	return oc
+
+####################################################################################################
+
+def HistoryAddToFavouritesMenu(mediainfo, path, parent_name):
+
+	oc = ObjectContainer(title1=parent_name, title2=L("HistoryAddToFavourites"))
+	
+	# Keep it simple. Add given item and path to favourites.
+	favs = load_favourite_items()
+	favs.add(mediainfo, path)
+	save_favourite_items(favs)
+		
+	oc.header = L("HistoryFavouriteAddedTitle")
+	oc.message = str(L("HistoryFavouriteAddedMsg")) % path[-1]['elem']
+	
+	return oc
+
+####################################################################################################
+	
+def FavouritesMenu(parent_name=None):
+
+	oc = ObjectContainer(no_cache=True, view_group="InfoList", title1=parent_name, title2=L("FavouritesTitle"))
+	
+	sort_order = FavouriteItems.SORT_DEFAULT
+	if (Prefs['favourite_sort'] == 'Alphabetical'):
+		sort_order = FavouriteItems.SORT_ALPHABETICAL
+	elif (Prefs['favourite_sort'] == 'Most Recently Used'):
+		sort_order = FavouriteItems.SORT_MRU
+		
+	favs = load_favourite_items().get(sort_order)
+	
+	# For each favourite item....
+	for item in favs:
+		
+		mediainfo = item[0]
+		navpath = item[1]
+				
+		# If the item is a TV show, come up with sensible display name.
+		summary = None
+		if (mediainfo.type == 'movies'):
+			summary = mediainfo.summary
+		
+		oc.add(
+			PopupDirectoryObject(
+				key=Callback(
+					FavouritesNavPathMenu,
+					mediainfo=mediainfo,
+					navpath=navpath,
+					parent_name=oc.title2
+				),
+				title= mediainfo.title,
+				summary=summary,
+				art=mediainfo.background,
+				thumb= mediainfo.poster,
+				duration=mediainfo.duration,
+				
+			)
+		)
+			
+	oc.add(
+		DirectoryObject(
+			key=Callback(FavouritesClearMenu),
+			title=L("FavouritesClearTitle"),
+			summary=L("FavouritesClearSummary"),
+		)
+	)
+		
+	return oc
+
+####################################################################################################
+
+def FavouritesClearMenu():
+
+	Data.Remove(FAVOURITE_ITEMS_KEY)
+	
+	oc = FavouritesMenu()
+	oc.replace_parent = True
+	return oc
+
+####################################################################################################
+
+def FavouritesNavPathMenu(mediainfo, navpath, parent_name):
+
+	oc = ObjectContainer(title1=parent_name, title2="Favourites")
+	
+	# Grab a copy of the path we can update as we're iterating through it.
+	path = list(navpath)
+	
+	# The path as stored in the system is top down. However, we're going to
+	# display it in reverse order (bottom up), so match that.
+	path.reverse()
+		
+	for item in reversed(navpath):
+	
+		# When the users select this option, the selected option will automatically
+		# be re-added to the path by the called menu function. So, remove it now so
+		# we don't get duplicates.
+		if (len(path) > 0):
+			path.pop(0)
+			
+	
+		# The order in which we're processing the path (bottom up) isn't the 
+		# same as how it was navigated (top down). So, reverse it to
+		# put in the right order to pass on to the normal navigation functions.
+		ordered_path = list(path)
+		ordered_path.reverse()
+	
+		# Depending on the types of args present, we may end up calling different methods.
+		#
+		# If we have an item URL, take user to provider list for that URL
+		if ("url" in item):
+			callback = Callback(
+				SourcesMenu, mediainfo=mediainfo, url=item['url'], item_name=None, path=ordered_path, parent_name=oc.title2)
+			
+		# If we have a show URL, take user to season listing for that show
+		elif ("show_url" in item):
+			callback = Callback(TVSeasonMenu, mediainfo=mediainfo, url=item['show_url'], item_name=mediainfo.show_name, path=ordered_path, parent_name=oc.title2)
+		
+		# If we have a season URL, take user to episode listing for that season.
+		elif ("season_url" in item):
+			callback = Callback(TVSeasonShowsMenu, mediainfo=mediainfo, season_url=item['season_url'], item_name=mediainfo.season, path=ordered_path, parent_name=oc.title2)
+		
+		oc.add(
+			DirectoryObject(
+				key=callback,
+				title=item['elem']
+			)
+		)
+		
+	oc.add(
+		DirectoryObject(
+			key=Callback(NoOpMenu),
+			title='----------------------'
+		)
+	)
+	
+	oc.add(
+		DirectoryObject(
+			key=Callback(FavouritesRemoveItemMenu, mediainfo=mediainfo),
+			title=L("FavouritesRemove"),
+		)
+	)
+	
+	if (mediainfo.type == 'tv'):
+		oc.add(
+			DirectoryObject(
+				key=Callback(FavouritesNotifyMenu),
+				title=L("FavouritesNewItemNotify")
+			)
+		)
+	
+	
+	return oc
+
+####################################################################################################
+
+def FavouritesRemoveItemMenu(mediainfo):
+
+	favs = load_favourite_items()
+	favs.remove(mediainfo)
+	save_favourite_items(favs)
+	
+	oc = FavouritesMenu()
+	oc.replace_parent = True
+	return oc
+
+def FavouritesNotifyMenu():
+
+	oc = ObjectContainer(title1="", title2="")
+	oc.header = "-- FIXME --"
+	oc.message = "--FIXME --"
+	
 	return oc
 	
+def NoOpMenu():
+
+	return
+
 ####################################################################################################
 # PAGE PARSING
 ####################################################################################################
@@ -1310,11 +1530,9 @@ def PlaybackStarted(url):
 	path = info[1]
 	
 	# Load up viewing history, and add item to it.
-	hist = get_watched_history()
-		
+	hist = load_watched_items()
 	hist.add(mediainfo, path, int(Prefs['watched_amount']))
-	
-	Data.Save(VIEW_HIST_KEY, cerealizer.dumps(hist))
+	save_watched_items(hist)
 	
 	#Log("Playback started on item:" + str(mediainfo))
 	#Log("Viewing history: " + str(hist))
@@ -1363,11 +1581,34 @@ def need_watched_indicator(type):
 
 ###############################################################################
 #
-def get_watched_history():
+def load_watched_items():
 
-	if (Data.Exists(VIEW_HIST_KEY)):
-		hist = cerealizer.loads(Data.Load(VIEW_HIST_KEY))
+	if (Data.Exists(WATCHED_ITEMS_KEY)):
+		hist = cerealizer.loads(Data.Load(WATCHED_ITEMS_KEY))
 	else:
 		hist = ViewedItems()
 		
 	return hist
+
+###############################################################################
+#	
+def save_watched_items(hist):
+
+	Data.Save(WATCHED_ITEMS_KEY, cerealizer.dumps(hist))
+	
+###############################################################################
+#
+def load_favourite_items():
+
+	if (Data.Exists(FAVOURITE_ITEMS_KEY)):
+		favs = cerealizer.loads(Data.Load(FAVOURITE_ITEMS_KEY))
+	else:
+		favs = FavouriteItems()
+		
+	return favs
+
+###############################################################################
+#
+def save_favourite_items(favs):
+	
+	Data.Save(FAVOURITE_ITEMS_KEY, cerealizer.dumps(favs))

@@ -1,23 +1,44 @@
 {
-    "Title": "Let Me Watch This",
- 
-     //================ Main Menu ===============
-    "MoviesTitle":"Movies",
-    "MoviesSubtitle":"Movies",
-    "MoviesSummary":"Watch High Quality Movies. Your one stop shop for DVD and BluRay releases.",
-    
-    "TVTitle":"TV Shows",
-    "TVSubtitle":"TV Shows & Episodes",
-    "TVSummary":"Collection of TV Shows and Episodes",
-    
-    "HistoryTitle":"Recently Watched",
-	"HistorySubtitle":"Access recently watched items",
-	"HistorySummary":"Quick access to items you have recently watched.",
+"Title": "Let Me Watch This",
 
-	"HistoryClearTitle":"Clear Recently Watched",	
-	"HistoryClearSummary":"You can also disable items being added to your Recently Watched list from the Preferences menu",
-			
-    "PrefsTitle":"Preferences",
-    "PrefsSubtitle":"Set your preferences here",
-    "PrefsSummary":"Set your preferences here", 
+//================ Main Menu ===============
+"MoviesTitle":"Movies",
+"MoviesSubtitle":"Movies",
+"MoviesSummary":"Watch High Quality Movies. Your one stop shop for DVD and BluRay releases.",
+
+"TVTitle":"TV Shows",
+"TVSubtitle":"TV Shows & Episodes",
+"TVSummary":"Collection of TV Shows and Episodes",
+
+"HistoryTitle":"Recently Watched",
+"HistorySubtitle":"Access recently watched items",
+"HistorySummary":"Quick access to items you have recently watched.",
+	
+"FavouritesTitle":"Favourites",
+"FavouritesSummary":"Quickly access your favourite items.",
+
+"PrefsTitle":"Preferences",
+"PrefsSubtitle":"Set your preferences here",
+"PrefsSummary":"Set your preferences here", 
+
+//========= Recently Watched Menu ============
+"HistoryTitle":"Recently Watched",
+
+"HistoryClearTitle":"Clear Recently Watched",	
+"HistoryClearSummary":"You can also disable items being added to your Recently Watched list from the Preferences menu",
+
+"HistoryAddToFavourites":"Add to Favourites",
+"HistoryAddToFavouritesItem":"Add to Favourites - %s",
+"HistoryFavouriteAddedTitle":"Item added to Favourites",
+"HistoryFavouriteAddedMsg":"%s has been added to your favourites.",
+
+//========= Favourites Menu ============
+"FavouritesTitle":"Favourites",
+
+"FavouritesClearTitle":"Clear Favourites",
+"FavouritesClearSummary":"You can also remove a single Favourite item by selecting it from this list and selecting 'Remove from Favourites'",
+
+"FavouritesRemove":"Remove from Favourites",
+"FavouritesNewItemNotify":"Turn on new item indicator",
+
 }
