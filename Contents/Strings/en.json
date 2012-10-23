@@ -39,6 +39,7 @@
 "FavouritesClearSummary":"You can also remove a single Favourite item by selecting it from this list and selecting 'Remove from Favourites'",
 
 "FavouritesRemove":"Remove from Favourites",
-"FavouritesNewItemNotify":"Turn on new item indicator",
+"FavouritesNewItemNotifyTurnOn":"Turn on new item indicator",
+"FavouritesNewItemNotifyTurnOff":"Turn off new item indicator",
 
 }

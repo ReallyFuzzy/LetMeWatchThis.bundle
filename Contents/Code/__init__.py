@@ -15,9 +15,6 @@ from MetaProviders import DBProvider, MediaInfo
 from RecentItems import BrowsedItems, ViewedItems, FavouriteItems
 
 cerealizer.register(MediaInfo)
-cerealizer.register(BrowsedItems)
-cerealizer.register(ViewedItems)
-cerealizer.register(FavouriteItems)
 
 VIDEO_PREFIX = "/video/lmwt"
 NAME = L('Title')
@@ -163,6 +160,13 @@ def VideoMainMenu():
 		)
 		
 	favs = load_favourite_items()
+	
+	# Remove old style favourites. Shouldn't be needed for too long as these
+	# were only available for a day....
+	if (len(favs) > 0 and isinstance(favs.get()[0],list)):
+		Data.Remove(FAVOURITE_ITEMS_KEY)
+		favs = load_favourite_items()
+
 	if (len(favs) > 0):
 		oc.add(
 			DirectoryObject(
@@ -977,8 +981,8 @@ def FavouritesMenu(parent_name=None):
 	# For each favourite item....
 	for item in favs:
 		
-		mediainfo = item[0]
-		navpath = item[1]
+		mediainfo = item.mediainfo
+		navpath = item.path
 				
 		# If the item is a TV show, come up with sensible display name.
 		summary = None
@@ -989,8 +993,7 @@ def FavouritesMenu(parent_name=None):
 			PopupDirectoryObject(
 				key=Callback(
 					FavouritesNavPathMenu,
-					mediainfo=mediainfo,
-					navpath=navpath,
+					favourite=item,
 					parent_name=oc.title2
 				),
 				title= mediainfo.title,
@@ -1024,18 +1027,20 @@ def FavouritesClearMenu():
 
 ####################################################################################################
 
-def FavouritesNavPathMenu(mediainfo, navpath, parent_name):
+def FavouritesNavPathMenu(favourite=None, parent_name=None):
 
 	oc = ObjectContainer(title1=parent_name, title2="Favourites")
 	
+	mediainfo = favourite.mediainfo
+	
 	# Grab a copy of the path we can update as we're iterating through it.
-	path = list(navpath)
+	path = list(favourite.path)
 	
 	# The path as stored in the system is top down. However, we're going to
 	# display it in reverse order (bottom up), so match that.
 	path.reverse()
 		
-	for item in reversed(navpath):
+	for item in reversed(favourite.path):
 	
 		# When the users select this option, the selected option will automatically
 		# be re-added to the path by the called menu function. So, remove it now so
@@ -1087,10 +1092,14 @@ def FavouritesNavPathMenu(mediainfo, navpath, parent_name):
 	)
 	
 	if (mediainfo.type == 'tv'):
+		title = L("FavouritesNewItemNotifyTurnOn")
+		if (favourite.new_item_check):
+			title = L("FavouritesNewItemNotifyTurnOff")
+			
 		oc.add(
 			DirectoryObject(
 				key=Callback(FavouritesNotifyMenu),
-				title=L("FavouritesNewItemNotify")
+				title=title
 			)
 		)
 	
