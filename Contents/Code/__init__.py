@@ -107,7 +107,7 @@ def Start():
 	HTTP.Headers['Connection'] = 'keep-alive'
 	
 	if (Prefs['versiontracking'] == True):
-		Thread.Create(VersionTracking)
+		Thread.Create(VersionTrack)
 		
 	# Check the favourite object and viewing history object are of the right type.
 	# This should be a one-off hit as we migrate to new data structure.
