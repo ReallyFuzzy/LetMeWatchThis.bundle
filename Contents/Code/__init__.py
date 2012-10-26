@@ -107,6 +107,16 @@ def Start():
 	
 	if (Prefs['versiontracking'] == True):
 		Thread.Create(VersionTracking)
+		
+	# Check the favourite object and viewing history object are of the right type.
+	# This should be a one-off hit as we migrate to new data structure.
+	if (type(load_favourite_items()) is not FavouriteItems):
+		Log("********** Need to remove favourites as they are old type.")
+		Data.Remove(FAVOURITE_ITEMS_KEY)
+		
+	if (not hasattr(load_watched_items(), "mark_watched")):
+		Log("********** Need to remove Recently Watched / Viewing History as they are old type.")
+		Data.Remove(WATCHED_ITEMS_KEY)	
 
 	Thread.Create(CheckForNewItemsInFavourites)
 	
@@ -123,8 +133,6 @@ def ValidatePrefs():
 
 def VideoMainMenu():
 
-	#Data.Remove(FAVOURITE_ITEMS_KEY)
-	
 	oc = ObjectContainer(no_cache=True, title1=L("Video Channels"), title2=NAME, view_group="InfoList")
 	
 	oc.add(
@@ -160,29 +168,23 @@ def VideoMainMenu():
 			)
 		)
 		
-	favs = load_favourite_items()
 	
-	# Remove old style favourites. Shouldn't be needed for too long as these
-	# were only available for a day....
-	if (len(favs) > 0 and isinstance(favs.get()[0],list)):
-		Data.Remove(FAVOURITE_ITEMS_KEY)
-		favs = load_favourite_items()
+	
+	title = str(L("Favourites"))
 
-	if (len(favs) > 0):
-	
-		title = str(L("Favourites"))
-		if (len([x for x in favs.get() if x.new_item]) > 0):
-			title += " - New item(s) available"
-		oc.add(
-			DirectoryObject(
-				key=Callback(FavouritesMenu,parent_name=oc.title2,),
-				title=title,
-				tagline=L("FavouritesSubtitle"),
-				summary=L("FavouritesSummary"),
-				thumb=R("Favorite.png"),
-			)
+	if (len([x for x in load_favourite_items().get() if x.new_item]) > 0):
+		title += " - New item(s) available"
+		
+	oc.add(
+		DirectoryObject(
+			key=Callback(FavouritesMenu,parent_name=oc.title2,),
+			title=title,
+			tagline=L("FavouritesSubtitle"),
+			summary=L("FavouritesSummary"),
+			thumb=R("Favorite.png"),
 		)
-	
+	)
+
 	
 	oc.add(
 		PrefsObject(
@@ -1507,7 +1509,7 @@ def FavouritesNotifyMenu(mediainfo=None):
 			url = [v for k,v in fav.path[-1].items() if (k == 'show_url' or k == 'season_url')][0]
 			
 			# Get URLs of all the shows for the current favourite.
-			fav.items = [show[1] for show in Parsing.GetTVSeasonShows(url)][:-1]
+			fav.items = [show[1] for show in Parsing.GetTVSeasonShows(url)]
 			
 			fav.date_last_item_check = datetime.utcnow()
 			oc.message = "Plugin will check for new items and notify you when one is available.\nNote that this may slow down the plugin at startup."
@@ -1761,7 +1763,10 @@ def save_watched_items(hist):
 def load_favourite_items(lock=False):
 
 	if (Data.Exists(FAVOURITE_ITEMS_KEY)):
-		favs = cerealizer.loads(Data.Load(FAVOURITE_ITEMS_KEY))
+		try:
+			favs = cerealizer.loads(Data.Load(FAVOURITE_ITEMS_KEY))
+		except cerealizer.NotCerealizerFileError, ex:
+			favs = FavouriteItems()
 	else:
 		favs = FavouriteItems()
 		
