@@ -6,13 +6,18 @@ import copy
 import sys
 import base64
 
-from datetime import date, datetime
-from htmlentitydefs import name2codepoint as n2cp
-from urlparse import urlparse
+import Parsing
 
-from BeautifulSoup import BeautifulSoup
-from MetaProviders import DBProvider, MediaInfo
-from RecentItems import BrowsedItems, ViewedItems, FavouriteItems
+from datetime       import date, datetime
+from dateutil       import tz
+from htmlentitydefs import name2codepoint as n2cp
+from urlparse       import urlparse
+
+from BeautifulSoup  import BeautifulSoup
+
+from MetaProviders  import MediaInfo
+from RecentItems    import BrowsedItems, ViewedItems
+from Favourites     import FavouriteItems
 
 cerealizer.register(MediaInfo)
 
@@ -55,9 +60,6 @@ FEATURED_ICON='icon-featured.png'
 STANDUP_ICON='icon-standup.png'
 GENRE_BASE='icon-genre'
 GENRE_ICON=GENRE_BASE + '.png'
-
-LMWT_URL = "http://www.1channel.ch/"
-LMWT_SEARCH_URL= "http://www.1channel.ch/index.php"
 
 BROWSED_ITEMS_KEY = "RECENT_BROWSED_ITEMS"
 WATCHED_ITEMS_KEY = "USER_VIEWING_HISTORY"
@@ -104,13 +106,10 @@ def Start():
 	HTTP.Headers['Connection'] = 'keep-alive'
 	
 	if (Prefs['versiontracking'] == True):
-		try:
-			request = urllib2.Request(VERSION_URLS[VERSION])
-			request.add_header('User-agent', '-')	
-			response = urllib2.urlopen(request)
-		except:
-			pass
+		Thread.Create(VersionTracking)
 
+	Thread.Create(CheckForNewItemsInFavourites)
+	
 ####################################################################################################
 # see:
 #  http://dev.plexapp.com/docs/Functions.html#ValidatePrefs
@@ -123,6 +122,8 @@ def ValidatePrefs():
 # Main navigtion menu
 
 def VideoMainMenu():
+
+	#Data.Remove(FAVOURITE_ITEMS_KEY)
 	
 	oc = ObjectContainer(no_cache=True, title1=L("Video Channels"), title2=NAME, view_group="InfoList")
 	
@@ -168,10 +169,14 @@ def VideoMainMenu():
 		favs = load_favourite_items()
 
 	if (len(favs) > 0):
+	
+		title = str(L("Favourites"))
+		if (len([x for x in favs.get() if x.new_item]) > 0):
+			title += " - New item(s) available"
 		oc.add(
 			DirectoryObject(
 				key=Callback(FavouritesMenu,parent_name=oc.title2,),
-				title=L("Favourites"),
+				title=title,
 				tagline=L("FavouritesSubtitle"),
 				summary=L("FavouritesSummary"),
 				thumb=R("Favorite.png"),
@@ -482,7 +487,7 @@ def ItemsMenu(
 	
 	path = path + [{'elem': title2, 'type':type, 'genre':genre, 'sort':sort, 'alpha':alpha, 'section_name':section_name}]
 	
-	items = GetItems(type, genre, sort, alpha, num_pages, start_page)
+	items = Parsing.GetItems(type, genre, sort, alpha, num_pages, start_page)
 	
 	func_name = TVSeasonMenu
 	
@@ -567,7 +572,8 @@ def ItemsMenu(
 	return oc
 	
 ####################################################################################################
-
+# TV SEASONS MENUS
+####################################################################################################
 def TVSeasonMenu(mediainfo=None, url=None, item_name=None, path=[], parent_name=None):
 
 	if (item_name is not None):
@@ -580,9 +586,20 @@ def TVSeasonMenu(mediainfo=None, url=None, item_name=None, path=[], parent_name=
 	
 	path = path + [{'elem':mediainfo.show_name, 'show_url':url}]
 	
+	# Retrieve the imdb id out as this is what favourites are keyed on and this is the
+	# first level where an item can be added to favourites.
+	mediainfo.id = Parsing.GetMediaInfo(url, mediainfo.type).id
+	
 	#Log(mediainfo)
 	
-	items = GetTVSeasons("/" + url)
+	oc.add(
+		PopupDirectoryObject(
+			key=Callback(TVSeasonActionMenu, mediainfo=mediainfo, path=path),
+			title=L("TVSeasonActionTitle"),
+		)
+	)
+	
+	items = Parsing.GetTVSeasons("/" + url)
 	
 	for item in items:
 		oc.add(
@@ -607,6 +624,68 @@ def TVSeasonMenu(mediainfo=None, url=None, item_name=None, path=[], parent_name=
 
 ####################################################################################################
 
+def TVSeasonActionMenu(mediainfo, path):
+
+	oc = ObjectContainer(view_group="InfoList", title1="", title2="")
+	
+	if (Prefs['watched_indicator'] != 'Disabled'):
+		oc.add(
+			DirectoryObject(
+				key=Callback(TVSeasonActionWatch, item_name=path[-1]['elem'], mediainfo=mediainfo, path=path, action="watch"),
+				title="Mark Show as Watched",
+			)
+		)
+	
+		oc.add(
+			DirectoryObject(
+				key=Callback(TVSeasonActionWatch, item_name=path[-1]['elem'], mediainfo=mediainfo, path=path, action="unwatch"),
+				title="Mark Show as Unwatched",
+			)
+		)
+	
+	# These won't get used and are keyed to a specific episode, so reset them.
+	mediainfo.url = None
+	mediainfo.summary = None
+	mediainfo.season = None
+	
+	# Come up with a nice easy title for later.
+	mediainfo.title = mediainfo.show_name
+	
+	fav_path = [item for item in path if ('show_url' in item)]
+	
+	oc.add(
+		DirectoryObject(
+			key=Callback(HistoryAddToFavouritesMenu, mediainfo=mediainfo, path=[fav_path[0]], parent_name=oc.title2),
+			title="Add Show to Favourites",
+		)
+	)
+	
+	return oc
+	
+####################################################################################################
+
+def TVSeasonActionWatch(item_name=None, mediainfo=None, path=None, action="watch"):
+
+	items = []
+	base_path = [item for item in path if ('show_url' in item)]
+	show_url = base_path[0]['show_url']
+	
+	# Get a list of all seasons for this show.
+	for item in Parsing.GetTVSeasons("/" + show_url):
+	
+		item_path = copy.copy(base_path)
+		item_mediainfo = copy.copy(mediainfo)
+		item_mediainfo.season = item[0]
+		item_path.append({ 'elem': item[0], 'season_url': item[1] })
+		items.append([item_mediainfo, item_path])
+		
+	# Mark them as watched / unwatched.
+	return TVSeasonShowsActionWatch(item_name=item_name, items=items, action=action)
+
+
+####################################################################################################
+# TV SEASON SHOWS MENUS
+####################################################################################################
 def TVSeasonShowsMenu(mediainfo=None, season_url=None,item_name=None, path=[], parent_name=None):
 
 	path = path + [{'elem':item_name,'season_url':season_url}]
@@ -616,14 +695,27 @@ def TVSeasonShowsMenu(mediainfo=None, season_url=None,item_name=None, path=[], p
 
 	need_indicator = need_watched_indicator('tv')
 	
+	# Is this in the user's favourites
+	
 	oc = ObjectContainer(no_cache=need_indicator, view_group="InfoList", title1=parent_name, title2=item_name)
 	
 	# Get Viewing history if we need an indicator.
 	hist = None
 	if (need_indicator):
 		hist = load_watched_items()
+		
+	indicator = ""
+	if (hist is not None):
+		indicator = "    "
 	
-	for item in GetTVSeasonShows("/" + season_url):
+	oc.add(
+		PopupDirectoryObject(
+			key=Callback(TVSeasonShowsActionMenu, mediainfo=mediainfo, path=path),
+			title=indicator + str(L("TVSeasonShowsActionTitle")),
+		)
+	)
+	
+	for item in Parsing.GetTVSeasonShows("/" + season_url):
 	
 		indicator = ''
 		
@@ -656,6 +748,74 @@ def TVSeasonShowsMenu(mediainfo=None, season_url=None,item_name=None, path=[], p
 
 ####################################################################################################
 
+def TVSeasonShowsActionMenu(mediainfo, path):
+
+	oc = ObjectContainer(view_group="InfoList", title1="", title2="Season Actions")
+	
+	if (Prefs['watched_indicator'] != 'Disabled'):
+		oc.add(
+			DirectoryObject(
+				key=Callback(TVSeasonShowsActionWatch, item_name=path[-1]['elem'], items=[[mediainfo, path]], action="watch"),
+				title="Mark All Episodes as Watched",
+			)
+		)
+	
+		oc.add(
+			DirectoryObject(
+				key=Callback(TVSeasonShowsActionWatch, item_name=path[-1]['elem'], items=[[mediainfo, path]], action="unwatch"),
+				title="Mark All Episodes as Unwatched",
+			)
+		)
+	
+	# These won't get used and are keyed to a specific episode, so reset them.
+	mediainfo.url = None
+	mediainfo.summary = None
+
+	# Come up with a nice easy title for later.
+	mediainfo.title = mediainfo.show_name + " - " + mediainfo.season
+
+	fav_path = [item for item in path if ('season_url' in item or 'show_url' in item)]
+	oc.add(
+		DirectoryObject(
+			key=Callback(HistoryAddToFavouritesMenu, mediainfo=mediainfo, path=fav_path, parent_name=oc.title2),
+			title="Add Season to Favourites"
+		)
+	)
+	
+	return oc
+
+####################################################################################################
+
+def TVSeasonShowsActionWatch(item_name=None, items=None, action="watch"):
+
+	episode_items = []
+	
+	for item in items:
+	
+		mediainfo = item[0]
+		path = item[1]
+
+		base_path = [item for item in path if ('season_url' in item or 'show_url' in item)]
+		season_url = [item for item in path if ('season_url' in item)][0]['season_url']
+		
+		episode_paths = []
+		
+		# Get a list of all the episodes for this season.
+		for item in Parsing.GetTVSeasonShows("/" + season_url):
+		
+			item_path = copy.copy(base_path)
+			item_path.append({ 'elem': item[0], 'url': item[1] })
+			episode_paths.append(item_path)
+		
+		episode_items.append([mediainfo, episode_paths])
+		
+	# Mark them as watched / unwatched.
+	return SourcesActionWatch(item_name=item_name, items=episode_items, action=action)
+
+
+####################################################################################################
+# SOURCES MENUS
+####################################################################################################
 def SourcesMenu(mediainfo=None, url=None, item_name=None, path=[], parent_name=None):
 	
 	if (item_name is None):
@@ -663,10 +823,10 @@ def SourcesMenu(mediainfo=None, url=None, item_name=None, path=[], parent_name=N
 	
 	path = path + [ { 'elem': item_name, 'url': url } ]
 	
-	oc = ObjectContainer(view_group="InfoList", title1=parent_name, title2=item_name)
+	oc = ObjectContainer(view_group="List", title1=parent_name, title2=item_name)
 	
 	# Get as much meta data as possible about this item.
-	mediainfo2 = GetMediaInfo(url, mediainfo.type)
+	mediainfo2 = Parsing.GetMediaInfo(url, mediainfo.type)
 	
 	# Did we get get any metadata back from meta data providers?
 	if (mediainfo2 is None or mediainfo2.id is None):
@@ -687,9 +847,20 @@ def SourcesMenu(mediainfo=None, url=None, item_name=None, path=[], parent_name=N
 			
 		if mediainfo2.title is None:
 			mediainfo2.title = item_name
+		
+	oc.add(
+		PopupDirectoryObject(
+			key=Callback(SourcesActionMenu, mediainfo=mediainfo, path=path),
+			title=L("ItemSourceActionTitle"),
+			tagline=None,
+			summary=None,
+			thumb=None,
+
+		)
+	)
 	
 	providerURLs = []
-	for item in GetSources(url):
+	for item in Parsing.GetSources(url):
 	
 		if (item['quality'] == "sponsored"):
 			continue
@@ -701,7 +872,7 @@ def SourcesMenu(mediainfo=None, url=None, item_name=None, path=[], parent_name=N
 			if (hasattr(mediaItem, 'url')):
 				providerURLs.append(mediaItem.url)
 					
-	if len(oc.objects) == 0:
+	if len(oc.objects) == 1:
 		oc.header = "No Enabled Sources Found"
 		oc.message = ""
 	else:
@@ -720,6 +891,108 @@ def SourcesMenu(mediainfo=None, url=None, item_name=None, path=[], parent_name=N
 		#Log("Browsed items: " + str(browsedItems))
 		
 	return oc
+
+####################################################################################################
+
+def SourcesActionMenu(mediainfo, path):
+
+	oc = ObjectContainer(view_group="InfoList", title1="", title2="")
+	
+	if (
+		Prefs['watched_indicator'] == 'All' 
+		or ( mediainfo.type == 'tv' and Prefs['watched_indicator'] != 'Disabled')
+	):
+		title = "Mark as Watched"
+		action = "watch"
+		hist = load_watched_items()
+		
+		if (hist.has_been_watched(path[-1]['url'])):
+			title = "Mark as Unwatched"
+			action = "unwatch"
+			
+		oc.add(
+			DirectoryObject(
+				key=Callback(SourcesActionWatch, item_name=path[-1]['elem'], items=[[mediainfo, [path]]], action=action),
+				title=title,
+			)
+		)
+	
+	if (mediainfo.type == "movies"):
+		oc.add(
+			DirectoryObject(
+				key=Callback(HistoryAddToFavouritesMenu, item_name=path[-1]['elem'], mediainfo=mediainfo, path=[path[-1]], parent_name=oc.title2),
+				title="Add to Favourites",
+			)
+		)
+
+	if (len(oc.objects) == 0):
+		oc.add(
+			DirectoryObject(
+				key=Callback(NoOpMenu),
+				title="No Options Available",
+			)
+		)
+
+		oc.header="No Options Available"
+		oc.message="No options currently available for this item. Enable Watched indicators to get options."
+		
+	return oc
+
+####################################################################################################
+
+def SourcesActionWatch(item_name=None, items=None, action="watch"):
+
+	oc = ObjectContainer(title1="", title2="")
+	
+	watched_favs = []
+	hist = load_watched_items()
+
+	for item in items:
+	
+		mediainfo = item[0]
+		paths = item[1]
+		
+		for path in paths:
+			if (action == "watch"):
+				hist.mark_watched(path)
+			else:
+				hist.mark_unwatched(path[-1]['url'])
+				
+	save_watched_items(hist)
+	
+	# Deal with Favourites.
+	if (action == "watch"):
+		
+		# Favourites keep their own list of what shows they consider to have been watched
+		Thread.AcquireLock(FAVOURITE_ITEMS_KEY)
+		
+		try:
+			favs = load_favourite_items()
+			for item in items:
+				mediainfo = item[0]
+				paths = item[1]
+				for path in paths:
+					watched_favs.extend(favs.watch(mediainfo, path[-1]['url']))
+			save_favourite_items(favs)
+		except Exception, ex:
+			Log(ex)
+			pass		
+		finally:
+			Thread.ReleaseLock(FAVOURITE_ITEMS_KEY)
+		
+		for fav in set(watched_favs):
+			Thread.Create(CheckForNewItemsInFavourite, favourite=fav, force=True)
+
+
+	# Normal processing.
+	if (action == "watch"):
+		oc.header = L("ItemSourceActionMarkAsWatchedHeader")
+		oc.message = str(L("ItemSourceActionMarkAsWatchedMessage")) % item_name	
+	else:
+		oc.header = L("ItemSourceActionMarkAsUnwatchedHeader")
+		oc.message = str(L("ItemSourceActionMarkAsUnwatchedMessage")) % item_name
+
+	return oc
 	
 ####################################################################################################
 
@@ -733,7 +1006,7 @@ def SearchResultsMenu(query, type, parent_name=None):
 	if (type=="movies"):
 		func_name = SourcesMenu
 		
-	for item in GetSearchResults(query=query, type=type):
+	for item in Parsing.GetSearchResults(query=query, type=type):
 		oc.add(
 			DirectoryObject(
 				key=Callback(func_name, mediainfo=item, url=item.id, path=path, parent_name=oc.title2),
@@ -753,19 +1026,20 @@ def SearchResultsMenu(query, type, parent_name=None):
 
 		
 ####################################################################################################
-
+# HISTORY MENU
+####################################################################################################
 def HistoryMenu(parent_name=None):
 
 	oc = ObjectContainer(no_cache=True, view_group="InfoList", title1=parent_name, title2=L("HistoryTitle"))
 	
-	history = load_watched_items().get(Prefs['watched_grouping'], int(Prefs['watched_amount']))
+	history = load_watched_items().get_recent(Prefs['watched_grouping'], int(Prefs['watched_amount']))
 	
 	# For each viewed video. 
 	for item in history:
 		
 		mediainfo = item[0]
 		navpath = item[1]
-		
+			
 		title = '' 
 		if (mediainfo.type == 'tv'):
 			
@@ -802,23 +1076,59 @@ def HistoryMenu(parent_name=None):
 		)
 			
 	oc.add(
-		DirectoryObject(
-			key=Callback(HistoryClearMenu),
+		PopupDirectoryObject(
+			key=Callback(HistoryClearMenu, parent_name=parent_name),
 			title=L("HistoryClearTitle"),
 			summary=L("HistoryClearSummary"),
 		)
 	)
-		
+	
 	return oc
 
 ####################################################################################################
 
-def HistoryClearMenu():
+def HistoryClearMenu(parent_name=None):
+
+	oc = ObjectContainer(no_cache=True, title1="", title2="")
+	
+	oc.add(
+		DirectoryObject(
+			key=Callback(HistoryClearRecent, parent_name=parent_name),
+			title=L("HistoryClearRecentTitle"),
+			summary=L("HistoryClearRecentSummary"),
+		)
+	)
+	
+	oc.add(
+		DirectoryObject(
+			key=Callback(HistoryClearAll, parent_name=parent_name),
+			title=L("HistoryClearAllTitle"),
+			summary=L("HistoryClearAllSummary"),
+		)
+	)
+	
+	return oc
+	
+####################################################################################################
+
+def HistoryClearRecent(parent_name=None):
+
+	hist = load_watched_items()
+	hist.clear_recent()
+	save_watched_items(hist)
+	
+	oc = HistoryMenu(parent_name=parent_name)
+	oc.replace_parent = True
+	return oc
+	
+####################################################################################################
+
+def HistoryClearAll(parent_name=None):
 
 	Data.Remove(WATCHED_ITEMS_KEY)
 	Data.Remove(BROWSED_ITEMS_KEY)
 	
-	oc = HistoryMenu()
+	oc = HistoryMenu(parent_name=parent_name)
 	oc.replace_parent = True
 	return oc
 
@@ -841,8 +1151,7 @@ def HistoryNavPathMenu(mediainfo, navpath, parent_name):
 		# be re-added to the path by the called menu function. So, remove it now so
 		# we don't get duplicates.
 		if (len(path) > 0):
-			path.pop(0)
-			
+			path.pop(0)		
 	
 		# The order in which we're processing the path (bottom up) isn't the 
 		# same as how it was navigated (top down). So, reverse it to
@@ -852,7 +1161,6 @@ def HistoryNavPathMenu(mediainfo, navpath, parent_name):
 	
 		# Depending on the types of args present, we may end up calling different methods.
 		#
-		
 		# If we have a query term, take user to search results.
 		if ("query" in item):
 			callback = Callback(
@@ -898,6 +1206,15 @@ def HistoryNavPathMenu(mediainfo, navpath, parent_name):
 			title='----------------------'
 		)
 	)
+	
+	# Remove from recently watched list.
+	oc.add(
+		DirectoryObject(
+			key=Callback(HistoryRemoveFromRecent, mediainfo=mediainfo, path=path, parent_name=oc.title2),
+			title="Remove from Recently Watched"
+		)
+	)
+			
 	
 	# Add to Favourites menu options.
 	# Deal with the fact that the path to be added to favourites is different
@@ -950,22 +1267,39 @@ def HistoryNavPathMenu(mediainfo, navpath, parent_name):
 
 ####################################################################################################
 
+def HistoryRemoveFromRecent(mediainfo, path, parent_name):
+
+	hist = load_watched_items()
+	hist.remove_from_recent(mediainfo, Prefs['watched_grouping'])
+	save_watched_items(hist)			
+	
+####################################################################################################
+
 def HistoryAddToFavouritesMenu(mediainfo, path, parent_name):
 
 	oc = ObjectContainer(title1=parent_name, title2=L("HistoryAddToFavourites"))
 	
 	# Keep it simple. Add given item and path to favourites.
-	favs = load_favourite_items()
-	favs.add(mediainfo, path)
-	save_favourite_items(favs)
+	Thread.AcquireLock(FAVOURITE_ITEMS_KEY)
+	try:
+		favs = load_favourite_items()
+		favs.add(mediainfo, path)
+		save_favourite_items(favs)
+	except Exception, ex:
+		Log(ex)
+		pass		
+	finally:
+		Thread.ReleaseLock(FAVOURITE_ITEMS_KEY)
 		
 	oc.header = L("HistoryFavouriteAddedTitle")
 	oc.message = str(L("HistoryFavouriteAddedMsg")) % path[-1]['elem']
 	
 	return oc
 
+
 ####################################################################################################
-	
+# FAVOURITES MENUS
+####################################################################################################
 def FavouritesMenu(parent_name=None):
 
 	oc = ObjectContainer(no_cache=True, view_group="InfoList", title1=parent_name, title2=L("FavouritesTitle"))
@@ -976,27 +1310,40 @@ def FavouritesMenu(parent_name=None):
 	elif (Prefs['favourite_sort'] == 'Most Recently Used'):
 		sort_order = FavouriteItems.SORT_MRU
 		
-	favs = load_favourite_items().get(sort_order)
+	favs = load_favourite_items().get(sort=sort_order)
 	
 	# For each favourite item....
 	for item in favs:
 		
 		mediainfo = item.mediainfo
 		navpath = item.path
+		
+		title = mediainfo.title
+		if (item.new_item):
+			title = title + " - New Item(s)"
 				
 		# If the item is a TV show, come up with sensible display name.
-		summary = None
+		summary = ""
 		if (mediainfo.type == 'movies'):
 			summary = mediainfo.summary
+		else:
+			if (item.new_item_check):
+				local = item.date_last_item_check.replace(tzinfo=tz.tzutc()).astimezone(tz.tzlocal())
+				if (item.new_item):
+					summary += str(L("FavouritesNewItemNotifySummaryNew")) % local.strftime("%Y-%m-%d %H:%M")
+				else:
+					summary += str(L("FavouritesNewItemNotifySummaryNoNew")) % local.strftime("%Y-%m-%d %H:%M")
 		
 		oc.add(
 			PopupDirectoryObject(
 				key=Callback(
 					FavouritesNavPathMenu,
-					favourite=item,
+					mediainfo=item.mediainfo,
+					path=item.path,
+					new_item_check=item.new_item_check,
 					parent_name=oc.title2
 				),
-				title= mediainfo.title,
+				title= title,
 				summary=summary,
 				art=mediainfo.background,
 				thumb= mediainfo.poster,
@@ -1027,32 +1374,30 @@ def FavouritesClearMenu():
 
 ####################################################################################################
 
-def FavouritesNavPathMenu(favourite=None, parent_name=None):
+def FavouritesNavPathMenu(mediainfo=None, path=None, new_item_check=None, parent_name=None):
 
 	oc = ObjectContainer(title1=parent_name, title2="Favourites")
 	
-	mediainfo = favourite.mediainfo
-	
 	# Grab a copy of the path we can update as we're iterating through it.
-	path = list(favourite.path)
+	cur_path = list(path)
 	
 	# The path as stored in the system is top down. However, we're going to
 	# display it in reverse order (bottom up), so match that.
-	path.reverse()
+	cur_path.reverse()
 		
-	for item in reversed(favourite.path):
+	for item in reversed(path):
 	
 		# When the users select this option, the selected option will automatically
 		# be re-added to the path by the called menu function. So, remove it now so
 		# we don't get duplicates.
-		if (len(path) > 0):
-			path.pop(0)
+		if (len(cur_path) > 0):
+			cur_path.pop(0)
 			
 	
 		# The order in which we're processing the path (bottom up) isn't the 
 		# same as how it was navigated (top down). So, reverse it to
 		# put in the right order to pass on to the normal navigation functions.
-		ordered_path = list(path)
+		ordered_path = list(cur_path)
 		ordered_path.reverse()
 	
 		# Depending on the types of args present, we may end up calling different methods.
@@ -1093,12 +1438,12 @@ def FavouritesNavPathMenu(favourite=None, parent_name=None):
 	
 	if (mediainfo.type == 'tv'):
 		title = L("FavouritesNewItemNotifyTurnOn")
-		if (favourite.new_item_check):
+		if (new_item_check):
 			title = L("FavouritesNewItemNotifyTurnOff")
 			
 		oc.add(
 			DirectoryObject(
-				key=Callback(FavouritesNotifyMenu),
+				key=Callback(FavouritesNotifyMenu, mediainfo=mediainfo),
 				title=title
 			)
 		)
@@ -1110,381 +1455,149 @@ def FavouritesNavPathMenu(favourite=None, parent_name=None):
 
 def FavouritesRemoveItemMenu(mediainfo):
 
-	favs = load_favourite_items()
-	favs.remove(mediainfo)
-	save_favourite_items(favs)
+	# Keep it simple. Remove item from favourites.
+	Thread.AcquireLock(FAVOURITE_ITEMS_KEY)
+	try:
+		favs = load_favourite_items()
+		favs.remove(mediainfo)
+		save_favourite_items(favs)
+	except Exception, ex:
+		Log(ex)
+		pass		
+	finally:
+		Thread.ReleaseLock(FAVOURITE_ITEMS_KEY)
+
 	
 	oc = FavouritesMenu()
 	oc.replace_parent = True
 	return oc
 
-def FavouritesNotifyMenu():
+####################################################################################################
+
+def FavouritesNotifyMenu(mediainfo=None):
 
 	oc = ObjectContainer(title1="", title2="")
-	oc.header = "-- FIXME --"
-	oc.message = "--FIXME --"
+	
+	# Load up favourites and get reference to stored favourite rather than
+	# dissociated favourite that's been passed in.
+	
+	Thread.AcquireLock(FAVOURITE_ITEMS_KEY)
+	try:
+		favs = load_favourite_items(lock=True)
+		fav = favs.get(mediainfo=mediainfo)[0]
+		
+		# Are we turning it on or off?
+		if (fav.new_item_check):
+		
+			
+			# Turning it off.
+			fav.new_item_check = False
+			fav.new_item = None
+			fav.items = None
+			fav.date_last_item_check = None
+			oc.message = "Plugin will no longer check for new items."
+		
+		else:
+		
+			# Turning it on.
+			fav.new_item_check = True
+			fav.new_item = False
+			
+			# Get page URL
+			url = [v for k,v in fav.path[-1].items() if (k == 'show_url' or k == 'season_url')][0]
+			
+			# Get URLs of all the shows for the current favourite.
+			fav.items = [show[1] for show in Parsing.GetTVSeasonShows(url)][:-1]
+			
+			fav.date_last_item_check = datetime.utcnow()
+			oc.message = "Plugin will check for new items and notify you when one is available.\nNote that this may slow down the plugin at startup."
+			
+		save_favourite_items(favs)
+		
+	finally:
+		Thread.ReleaseLock(FAVOURITE_ITEMS_KEY)
+		
+	oc.header = "New Item Notification"
 	
 	return oc
 	
+	
 def NoOpMenu():
 
-	return
+	return ""
 
 ####################################################################################################
-# PAGE PARSING
+# FAVOURITE UTILS
 ####################################################################################################
 
-def GetMediaInfo(url, type):
+def CheckForNewItemsInFavourites():
 
-	# The description meta header for some shows inserts random double quotes in the
-	# content which breaks the parsing of the page. Work around that by simply
-	# removing the head section in which the meta elements are contained.
-	headMassage = [(re.compile('<head>(.*)</head>', re.S), lambda match: '')]
-	soupMassage = copy.copy(BeautifulSoup.MARKUP_MASSAGE)
-	soupMassage.extend(headMassage)
+	favs = load_favourite_items().get()
+		
+	for fav in favs:
+		CheckForNewItemsInFavourite(fav)
+		
+	# Re-check in 12 hour.
+	Thread.CreateTimer(12 * 60 * 60, CheckForNewItemsInFavourites)
+
 	
-	soup = BeautifulSoup(HTTP.Request(LMWT_URL + url).content, markupMassage=soupMassage)
-
-	try:
-		imdb_link = soup.find('div','mlink_imdb').a['href']
-		imdb_id = re.search("(tt\d+)", str(imdb_link)).group()
+def CheckForNewItemsInFavourite(favourite, force=False):
+	
+	#Log("Processing favourite: " + str(favourite.mediainfo))
+	
+	# Do we want to check this favourite for updates?
+	# If so, only bother if it's not already marked as having updates.
+	if (favourite.new_item_check and (favourite.new_item == False or force)):
+	
+		#Log("Checking for new item in favourite")
 		
-		mediainfo = DBProvider().GetProvider(type).RetrieveItemFromProvider(imdb_id)
-		
-		# Also parse the LMWT page and extract out any info not set by the meta provider.
-		info_div = soup.find('div', 'movie_info')
-		
-		# First, extract out description...
-		info = {}
-		info['Description:'] = info_div.find('td', { 'colspan': '2' }).text
-		
-		# Then, ratings....
-		info['Rating:'] = info_div.find('li', 'current-rating').text
-		
-		# Extract out any other info.
-		for row in info_div.findAll('tr'):
-			row_items = row.findAll('td')
-			if len(row_items) <> 2 or "colspan" in str(row_items[0]):
-				continue
-			info[row_items[0].text] = row_items[1].text
-		
-		# Map available extracted info back to the media info object.
-		# First, define the mapping between LMWT items and media info and an additional function
-		# to extract out sane info out of the LMWT data.
-		item_map = {
-			'Description:' : ['summary', lambda x: decode_htmlentities(x)], 
-			'Air Date:' : ['releasedate', lambda x: datetime.strptime(x, '%B %d, %Y')],
-			'Runtime:' : ['duration', lambda x: int(re.search("(\d*)", x).group(0)) * 60 * 1000 if int(re.search("(\d*)", x).group(0)) * 60 * 1000 < sys.maxint else 0],
-			'Rating:' : ['rating', lambda x: float(re.search("([\d\.]+)", x).group(0)) * 2],
-			'Title:': ['title', lambda x: decode_htmlentities(x)],
-		}
-		
-		# For each extracted item from LMWT...
-		for lmwt_item in info.keys():
-		
-			#Log("Processing: " + lmwt_item)
+		# Get page URL
+		url = [v for k,v in favourite.path[-1].items() if (k == 'show_url' or k == 'season_url')][0]
+	
+		# Get up-to-date list of shows available for the current favourite.
+		items = [show[1] for show in Parsing.GetTVSeasonShows(url)]
+					
+		# Are there any items in the current show list which aren't in the fav's show list?
+		# Note that all of these should automatically be unwatched since as items are watched,
+		# the favourites are updated with the url of the watched item. So, even if the 
+		# favourite wasn't aware of the watched item (i.e: new item since last check),
+		# it will still have been added to its list of watched items.
+		items_set = set(items)
+		new_items = items_set.difference(set(favourite.items))
+		#Log("Found new items: " + str(new_items))
 			
-			# Look for matching entry in map...
-			if lmwt_item not in item_map.keys():
-				continue
-				
-			mi_item = item_map[lmwt_item]
-			
-			if (mi_item is None):
-				#Log("Couldn't find a mi attr!")
-				continue
-				
-			try:
-				# And see if it's already set in the mediaInfo object.
-				mi_val = getattr(mediainfo, mi_item[0], None)
-				
-				# And set it if it's not already.
-				if (mi_val is None):
-					setattr(mediainfo, mi_item[0],  mi_item[1](info[lmwt_item]))
-						
-			except Exception, ex:
-				pass
-				
-		return mediainfo
-
-	except Exception, ex:
-		return None
-
-####################################################################################################
-
-def GetSources(url):
-
-	# The description meta header for some shows inserts random double quotes in the
-	# content which breaks the parsing of the page. Work around that by simply
-	# removing the head section in which the meta elements are contained.
-	headMassage = [(re.compile('<head>(.*)</head>', re.S), lambda match: '')]
-	soupMassage = copy.copy(BeautifulSoup.MARKUP_MASSAGE)
-	soupMassage.extend(headMassage)	
-	
-	soup = BeautifulSoup(HTTP.Request(LMWT_URL + url).content, markupMassage=soupMassage)
-
-	sources = []
-	
-	for item in soup.find('div', { 'id': 'first' }).findAll('table', { 'class' : re.compile('movie_version.*') }):
-
-		source = {}
+		# Items list is different.
+		# Because we may be taking a while to do this
+		# processing (we're relying on making a whole lot of HTTP requests to get
+		# items list), the favourites list may have changed. We could lock it for
+		# the duration of this whole method, but this may be a long lock. Instead,
+		# .....
+		Thread.AcquireLock(FAVOURITE_ITEMS_KEY)
+		try:
+			favs_disk = load_favourite_items()
+			fav_disk = favs_disk.get(favourite.mediainfo)[0]
 		
-		# Extract out source URL
-		source['url'] = str(item.find('span', { 'class' : 'movie_version_link' }).a['href'][1:])
+			fav_disk.new_item = len(new_items) > 0
+			fav_disk.date_last_item_check = datetime.utcnow()
 		
-		# Extract out source name.
-		source['name'] = str(item.find('span', { 'class' : 'movie_version_link' }).a.string)
-		if (source['name'].lower().find('trailer') >= 0):
-			continue
-		
-		# Extract out source quality.
-		quality_elem = item.find('span', { 'class': re.compile('quality_.*') })
-		quality = re.search("quality_(.*)", quality_elem['class']).group(1)
-		source['quality'] = quality
-		
-		# Extract out source provider name.
-		provider_name = None
-		prov_name_tag = item.find('span', { 'class': 'version_host' })
-
-		if (prov_name_tag.script is not None):
-			provider_name = re.search("writeln\('(.*)'\)", str(prov_name_tag.script)).group(1)
-			
-		if (provider_name is None and prov_name_tag.string is not None):
-			provider_name = prov_name_tag.string
-			
-		if (provider_name is None and prov_name_tag.img is not None):
-			if (prov_name_tag.img['src'].find('host_45') >= 0):
-				provider_name = "sockshare.com"
-			elif (prov_name_tag.img['src'].find('host_48') >= 0):
-				provider_name = "putlocker.com"
-			
-		source['provider_name'] = provider_name
-		
-		# Extract out source rating.
-		rating_style = item.find('div', { 'class': 'movie_ratings' }).find('li', { 'class': 'current-rating' })['style']
-		rating = re.search('([\d\.]*)px', rating_style).group(1)
-		if (rating is not None and rating <> ""):
-			source['rating'] = int(float(rating))
-		
-		# Extract out source rating vote numbers.
-		rating_count = item.find('div', { 'class' : re.compile('voted') }).string
-		source['rating_count'] = re.search("\D*(\d*)", rating_count).group(1)
-		
-		# Extract out source view count.
-		views = item.find('span', { 'class': 'version_veiws' }).string
-		source['views'] = re.search("\D*(\d*)", views).group(1)
-		
-		#Log(source)
-		sources.append(source)
-	
-	return sources
-
-
-####################################################################################################
-
-def GetTVSeasonShows(url):
-
-	# The description meta header for some shows inserts random double quotes in the
-	# content which breaks the parsing of the page. Work around that by simply
-	# removing the head section in which the meta elements are contained.
-	headMassage = [(re.compile('<head>(.*)</head>', re.S), lambda match: '')]
-	soupMassage = copy.copy(BeautifulSoup.MARKUP_MASSAGE)
-	soupMassage.extend(headMassage)	
-	
-	soup = BeautifulSoup(HTTP.Request(LMWT_URL + url).content, markupMassage=soupMassage)
-	
-	shows = []
-	
-	for item in soup.findAll('div', { 'class': 'tv_episode_item' }):
-	
-		show = []
-		
-		title = str(item.a.contents[0]).strip()
-		
-		if (item.a.span is not None):
-			title = title + " " + str(item.a.span.string).strip()
-		
-		show.append(title)
-		show.append(item.a['href'][1:])
-		
-		shows.append(show)
-		
-	return shows
-
-
-####################################################################################################
-
-def GetTVSeasons(url):
-
-	# The description meta header for some shows inserts random double quotes in the
-	# content which breaks the parsing of the page. Work around that by simply
-	# removing the head section in which the meta elements are contained.
-	headMassage = [(re.compile('<head>(.*)</head>', re.S), lambda match: '')]
-	soupMassage = copy.copy(BeautifulSoup.MARKUP_MASSAGE)
-	soupMassage.extend(headMassage)	
-	
-	soup = BeautifulSoup(HTTP.Request(LMWT_URL + url).content, markupMassage=soupMassage)
-
-	items = []
-
-	for item in soup.find("div", { 'id': 'first' }).findAll('h2'):
-	
-		items.append([str(item.a.string), item.a['href'][1:]])
-		
-	return items
-
-
-####################################################################################################
-
-def GetItems(type, genre = None, sort = None, alpha = None, pages = 5, start_page = 0):
-
-	page_num = 0
-	items = []
-	
-	while (page_num < pages):
-	
-		page_num = page_num + 1
-		url = GetURL(type = type, genre = genre, sort = sort, alpha = alpha, page_num = page_num + start_page)
-		soup = BeautifulSoup(HTTP.Request(url).content)
-		
-		for item in soup.findAll("div", { 'class': 'index_item index_item_ie' }):
-		
-			#Log('Found item: ' + str(item))
-			res = MediaInfo()
-			
-			res.type = type
-
-			# Extract out title
-			title_alt = item.find('a')['title']
-			res.title = re.search("Watch (.*)", title_alt).group(1)
-			
-			
-			# Extract out URL
-			res.id = item.a['href'][1:]
-			
-			# Extract out thumb
-			res.poster = item.find('img')['src']
-			
-			# Extract out rating
-			rating_style = item.find('li')['style']
-			rating = re.search("width:\s([\d\.]*)px;", rating_style).group(1);
-			
-			if (rating is not None and rating <> ""):
-				res.rating = int(int(rating) / 10)
-			
-			# Add to item list.
-			#Log("Adding item: " + str(res))
-			items.append(res)
-		
-	return items
-
-
-####################################################################################################
-
-def GetURL(type, genre = None, sort = None, page_num = None, alpha = None):
-
-	url = LMWT_URL + "?" + type + "="
-	
-	if (sort is not None):
-		url = url + "&sort=" + sort
-		
-	if (genre is not None):
-		url = url + "&genre=" + genre
-		
-	if (page_num is not None):
-		url = url + "&page=" + str(page_num)
-		
-	if (alpha is not None):
-		url = url + "&letter=" + alpha
-		
-		# if no specific sort order has been give, but we've been given
-		# a letter, sort alphabetically.
-		if (sort is None):
-			url = url + "&sort=alphabet"
-		
-	return url
-	
-	
-####################################################################################################
-
-def GetSearchResults(query=None,type=None,):
-	
-	items = []
-	
-	soup = BeautifulSoup(HTTP.Request(LMWT_SEARCH_URL + "?search",cacheTime=0).content)
-	key = soup.find('input', { 'type': 'hidden', 'name': 'key' })['value']
-	
-	section = "1"
-	if (type == "tv"):
-		section = "2"
-	
-	url = LMWT_SEARCH_URL + "?search_section=" + section + "&search_keywords=" + urllib.quote_plus(query) + "&key=" + key
-	soup = BeautifulSoup(HTTP.Request(url,cacheTime=0).content)
-	#Log(soup)
-	
-	for item in soup.findAll("div", { 'class': 'index_item index_item_ie' }):
-	
-		#Log('Found item: ' + str(item))
-		res = MediaInfo()
-		
-		res.type = type
-		
-		# Extract out title
-		title_alt = item.find('a')['title']
-		res.title = re.search("Watch (.*)", title_alt).group(1)
-		
-		# Extract out URL
-		res.id = item.a['href'][1:]
-		
-		# Extract out thumb
-		res.poster = item.find('img')['src']
-		
-		# Extract out rating
-		rating_style = item.find('li')['style']
-		res.rating = re.search("width:\s(\d)*px;", rating_style).group(1);
-		
-		# Add to item list.
-		#Log("Adding item: " + str(res))
-		items.append(res)
-	
-	#Log(items)
-	return items
+			save_favourite_items(favs_disk)
+		except Exception, ex:
+			Log(str(ex))
+			pass
+		finally:
+			Thread.ReleaseLock(FAVOURITE_ITEMS_KEY)
 
 	
 ####################################################################################################
-# PROVIDER SPECIFIC CODE
-####################################################################################################
-
 # Params:
 #   mediainfo: A MediaInfo item for the current LMWT item being viewed (either a movie or single episode).
 #   item:  A dictionary containing information for the selected source for the LMWT item being viewed.
 def GetItemForSource(mediainfo, item):
 	
-	# See if provider is supported.
-	providerURL = URLService.NormalizeURL(LMWT_URL + item['url'])
-	providerSupported = URLService.ServiceIdentifierForURL(providerURL) is not None
+	item = Parsing.GetItemForSource(mediainfo, item)
 	
-	if (providerSupported):
-	
-		# See if we need to hide provider....
-		providerInfoURL = "http://providerinfo." + item['provider_name'] + "/?plugin=lmwt"
-		providerVisible =  'visible=true' in URLService.NormalizeURL(providerInfoURL)
-		
-		if (providerVisible):
-		
-			return VideoClipObject(
-				url=providerURL,
-				title=item['name'] + " - " + item['provider_name'],
-				summary=mediainfo.summary,
-				art=mediainfo.background,
-				thumb= mediainfo.poster,
-				rating = float(mediainfo.rating),
-				duration=mediainfo.duration,
-				source_title = item['provider_name'] ,
-				year=mediainfo.year,
-				originally_available_at=mediainfo.releasedate,
-				genres=mediainfo.genres
-			)
+	if item is not None:
+		return item
 		
 	# The only way we can get down here is if the provider wasn't supported or
 	# the provider was supported but not visible. Maybe user still wants to see them?
@@ -1513,19 +1626,15 @@ def PlayVideoNotSupported(mediainfo, url):
 @route('/video/lmwt/playback/{url}')
 def PlaybackStarted(url):
 
-	# If user doesn't want to save recently watched items, abort.
-	if (Prefs['watched_amount'] == 'Disabled'):
+	# Nothing to do. User doesn't want any tracking.
+	if (Prefs['watched_indicator'] == 'Disabled' and Prefs['watched_amount'] == 'Disabled'):
 		return ""
 		
-	# If we don't have a list of items user has recently browsed, abort.
-	if (not Data.Exists(BROWSED_ITEMS_KEY)):
-		return ""
-	
-	# Get list of items user has recently looked at.
-	browsedItems =  cerealizer.loads(Data.Load(BROWSED_ITEMS_KEY))
-	
 	# Get clean copy of URL user has played.
 	decoded_url = String.Decode(str(url))
+
+	# Get list of items user has recently looked at.
+	browsedItems =  cerealizer.loads(Data.Load(BROWSED_ITEMS_KEY))
 	
 	# See if the URL being played is on our recently browsed list.
 	info = browsedItems.get(decoded_url)
@@ -1533,21 +1642,63 @@ def PlaybackStarted(url):
 	if (info is None):
 		Log("****** ERROR: Watching Item which hasn't been browsed to")
 		return ""
-		
+	
 	# Get the bits of info out of the recently browsed item.
 	mediainfo = info[0]
 	path = info[1]
+
+	# Does user want to keep track of watched items?
+	if (Prefs['watched_indicator'] != 'Disabled'):
+		# Load up viewing history, and add item to it.
+		hist = load_watched_items()
+		hist.mark_watched(path)
+		save_watched_items(hist)
 	
-	# Load up viewing history, and add item to it.
-	hist = load_watched_items()
-	hist.add(mediainfo, path, int(Prefs['watched_amount']))
-	save_watched_items(hist)
+	# Does user also want to keep track of Recently Watched Items?
+	if (Prefs['watched_amount'] != 'Disabled' and Data.Exists(BROWSED_ITEMS_KEY)):
+						
+		# Load up viewing history, and add item to it.
+		hist = load_watched_items()
+		hist.add_recent(mediainfo, path, Prefs['watched_grouping'], int(Prefs['watched_amount']))
+		save_watched_items(hist)
 	
+	# Favourites keep their own list of what shows they consider to have been watched to make
+	# sure their new unwatched show functionality works as expected.
+	if (mediainfo.type == 'tv'):
+	
+		Thread.AcquireLock(FAVOURITE_ITEMS_KEY)
+		watched_favs = []
+		try:
+			favs = load_favourite_items()
+			watched_favs = favs.watch(mediainfo, path[-1]['url'])
+			save_favourite_items(favs)
+		except Exception, ex:
+			Log(ex)
+			pass
+		finally:
+			Thread.ReleaseLock(FAVOURITE_ITEMS_KEY)
+			
+		# Even though this specific item has now been played, we can't just set the favourites
+		# new_item to false as there might have been multiple new items. So, check if this
+		# favourite still has new items or not.
+		for fav in watched_favs:
+			#Log(str(fav))
+			Thread.Create(CheckForNewItemsInFavourite, favourite=fav, force=True)
+
 	#Log("Playback started on item:" + str(mediainfo))
 	#Log("Viewing history: " + str(hist))
 	
 	return ""
 	
+def VersionTrack():
+
+	try:
+		request = urllib2.Request(VERSION_URLS[VERSION])
+		request.add_header('User-agent', '-')	
+		response = urllib2.urlopen(request)
+	except:
+		pass
+
 ###############################################################################
 # UTIL METHODS
 ###############################################################################
@@ -1607,7 +1758,7 @@ def save_watched_items(hist):
 	
 ###############################################################################
 #
-def load_favourite_items():
+def load_favourite_items(lock=False):
 
 	if (Data.Exists(FAVOURITE_ITEMS_KEY)):
 		favs = cerealizer.loads(Data.Load(FAVOURITE_ITEMS_KEY))
