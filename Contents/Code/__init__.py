@@ -114,7 +114,7 @@ def Start():
 		Log("********** Need to remove favourites as they are old type.")
 		Data.Remove(FAVOURITE_ITEMS_KEY)
 		
-	if (not hasattr(load_watched_items(), "mark_watched")):
+	if (not hasattr(load_watched_items(), "recent_items")):
 		Log("********** Need to remove Recently Watched / Viewing History as they are old type.")
 		Data.Remove(WATCHED_ITEMS_KEY)	
 
