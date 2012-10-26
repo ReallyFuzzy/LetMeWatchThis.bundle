@@ -923,11 +923,11 @@ def SourcesActionMenu(mediainfo, path):
 	if (mediainfo.type == "movies"):
 		oc.add(
 			DirectoryObject(
-				key=Callback(HistoryAddToFavouritesMenu, item_name=path[-1]['elem'], mediainfo=mediainfo, path=[path[-1]], parent_name=oc.title2),
+				key=Callback(HistoryAddToFavouritesMenu, mediainfo=mediainfo, path=[path[-1]], parent_name=oc.title2),
 				title="Add to Favourites",
 			)
 		)
-
+	
 	if (len(oc.objects) == 0):
 		oc.add(
 			DirectoryObject(
