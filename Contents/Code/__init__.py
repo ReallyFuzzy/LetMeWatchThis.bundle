@@ -72,12 +72,7 @@ USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_7_2) AppleWebKit/534.51.
 
 def Start():
 
-	## make this plugin show up in the 'Video' section
-	## in Plex. The L() function pulls the string out of the strings
-	## file in the Contents/Strings/ folder in the bundle
-	## see also:
-	##  http://dev.plexapp.com/docs/mod_Plugin.html
-	##  http://dev.plexapp.com/docs/Bundle.html#the-strings-directory
+	# Make this plugin show up in the 'Video' section
 	Plugin.AddPrefixHandler(VIDEO_PREFIX, VideoMainMenu, NAME, APP_ICON, ART)
 
 	Plugin.AddViewGroup("InfoList", viewMode="InfoList", mediaType="items")
@@ -85,20 +80,20 @@ def Start():
 	Plugin.AddViewGroup('PanelStream', viewMode='PanelStream', mediaType='items')
 	Plugin.AddViewGroup('MediaPreview', viewMode='MediaPreview', mediaType='items')
 
-	## set some defaults so that you don't have to
-	## pass these parameters to these object types
-	## every single time
-	## see also:
-	##  http://dev.plexapp.com/docs/Objects.html
+	# Set some defaults
 	MediaContainer.title1 = NAME
 	MediaContainer.viewGroup = "InfoList"
 	MediaContainer.art = R(ART)
 	MediaContainer.userAgent = USER_AGENT
 	
 	ObjectContainer.art=R(ART)
+	ObjectContainer.user_agent = USER_AGENT
 
 	DirectoryItem.thumb = R(APP_ICON)
 	VideoItem.thumb = R(APP_ICON)
+	
+	DirectoryObject.thumb = R(APP_ICON)
+	VideoClipObject.thumb = R(APP_ICON)
 	
 	HTTP.CacheTime = CACHE_1HOUR
 	HTTP.Headers['User-agent'] = USER_AGENT
@@ -610,6 +605,7 @@ def TVSeasonMenu(mediainfo=None, url=None, item_name=None, path=[], parent_name=
 		PopupDirectoryObject(
 			key=Callback(TVSeasonActionMenu, mediainfo=mediainfo, path=path),
 			title=L("TVSeasonActionTitle"),
+			thumb=mediainfo.poster,
 		)
 	)
 	
@@ -726,6 +722,7 @@ def TVSeasonShowsMenu(mediainfo=None, season_url=None,item_name=None, path=[], p
 		PopupDirectoryObject(
 			key=Callback(TVSeasonShowsActionMenu, mediainfo=mediainfo, path=path),
 			title=indicator + str(L("TVSeasonShowsActionTitle")),
+			thumb= mediainfo.poster,
 		)
 	)
 	
@@ -866,20 +863,20 @@ def SourcesMenu(mediainfo=None, url=None, item_name=None, path=[], parent_name=N
 		PopupDirectoryObject(
 			key=Callback(SourcesActionMenu, mediainfo=mediainfo, path=path),
 			title=L("ItemSourceActionTitle"),
-			tagline=None,
-			summary=None,
-			thumb=None,
-
+			summary=mediainfo2.summary,
+			art=mediainfo2.background,
+			thumb= mediainfo2.poster,
+			duration=mediainfo2.duration,
 		)
 	)
 	
 	providerURLs = []
-	for item in Parsing.GetSources(url):
+	for source_item in Parsing.GetSources(url):
 	
-		if (item['quality'] == "sponsored"):
+		if (source_item['quality'] == "sponsored"):
 			continue
 					
-		mediaItem = GetItemForSource(mediainfo=mediainfo2, item=item)
+		mediaItem = GetItemForSource(mediainfo=mediainfo2, source_item=source_item)
 		
 		if mediaItem is not None:
 			oc.add(mediaItem)
@@ -1094,6 +1091,7 @@ def HistoryMenu(parent_name=None):
 			key=Callback(HistoryClearMenu, parent_name=parent_name),
 			title=L("HistoryClearTitle"),
 			summary=L("HistoryClearSummary"),
+			thumb=None,
 		)
 	)
 	
@@ -1371,6 +1369,7 @@ def FavouritesMenu(parent_name=None):
 			key=Callback(FavouritesClearMenu),
 			title=L("FavouritesClearTitle"),
 			summary=L("FavouritesClearSummary"),
+			thumb=""
 		)
 	)
 		
@@ -1606,19 +1605,19 @@ def CheckForNewItemsInFavourite(favourite, force=False):
 # Params:
 #   mediainfo: A MediaInfo item for the current LMWT item being viewed (either a movie or single episode).
 #   item:  A dictionary containing information for the selected source for the LMWT item being viewed.
-def GetItemForSource(mediainfo, item):
+def GetItemForSource(mediainfo, source_item):
 	
-	item = Parsing.GetItemForSource(mediainfo, item)
+	media_item = Parsing.GetItemForSource(mediainfo, source_item)
 	
-	if item is not None:
-		return item
+	if media_item is not None:
+		return media_item
 		
 	# The only way we can get down here is if the provider wasn't supported or
 	# the provider was supported but not visible. Maybe user still wants to see them?
 	if (Prefs['show_unsupported']):
 		return DirectoryObject(
-			key = Callback(PlayVideoNotSupported, mediainfo = mediainfo, url = item['url']),
-			title = item['name'] + " - " + item['provider_name'] + " (Not playable)",
+			key = Callback(PlayVideoNotSupported, mediainfo = mediainfo, url = source_item['url']),
+			title = source_item['name'] + " - " + source_item['provider_name'] + " (Not playable)",
 			summary= mediainfo.summary,
 			art=mediainfo.background,
 			thumb= mediainfo.poster,
