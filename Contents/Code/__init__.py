@@ -24,8 +24,9 @@ cerealizer.register(MediaInfo)
 VIDEO_PREFIX = "/video/lmwt"
 NAME = L('Title')
 
-VERSION = "12.10.26.1"
+VERSION = "12.10.26.2"
 VERSION_URLS = {
+	"12.10.26.2": "http://bit.ly/PUBAWJ",
 	"12.10.26.1": "http://bit.ly/PUBAWJ",
 	"12.10.22.1": "http://bit.ly/R7ZieU",
 	"12.10.16.2": "http://bit.ly/R7ZieU",
@@ -111,13 +112,24 @@ def Start():
 		
 	# Check the favourite object and viewing history object are of the right type.
 	# This should be a one-off hit as we migrate to new data structure.
-	if (type(load_favourite_items()) is not FavouriteItems):
+	try: 
+		if (type(load_favourite_items()) is not FavouriteItems):
+			Log("********** Need to remove favourites as they are old type.")
+			Data.Remove(FAVOURITE_ITEMS_KEY)
+	except:
+		# Let's be aggressive about this. Something went wrong, let's assume it's do
+		# with the stored data being wrong somehow.
 		Log("********** Need to remove favourites as they are old type.")
 		Data.Remove(FAVOURITE_ITEMS_KEY)
+		pass
 		
-	if (not hasattr(load_watched_items(), "recent_items")):
+	try:
+		if (not hasattr(load_watched_items(), "recent_items")):
+			Log("********** Need to remove Recently Watched / Viewing History as they are old type.")
+			Data.Remove(WATCHED_ITEMS_KEY)
+	except:
 		Log("********** Need to remove Recently Watched / Viewing History as they are old type.")
-		Data.Remove(WATCHED_ITEMS_KEY)	
+		Data.Remove(WATCHED_ITEMS_KEY)
 
 	Thread.Create(CheckForNewItemsInFavourites)
 	
@@ -1764,10 +1776,7 @@ def save_watched_items(hist):
 def load_favourite_items(lock=False):
 
 	if (Data.Exists(FAVOURITE_ITEMS_KEY)):
-		try:
-			favs = cerealizer.loads(Data.Load(FAVOURITE_ITEMS_KEY))
-		except cerealizer.NotCerealizerFileError, ex:
-			favs = FavouriteItems()
+		favs = cerealizer.loads(Data.Load(FAVOURITE_ITEMS_KEY))
 	else:
 		favs = FavouriteItems()
 		
