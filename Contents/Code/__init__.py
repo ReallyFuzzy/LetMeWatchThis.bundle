@@ -1636,6 +1636,29 @@ def PlayVideoNotSupported(mediainfo, url):
 	)
 	
 
+@route('/video/lmwt/mediainfo/{url}')
+def MediaInfoLookup(url):
+
+	""" Returns the media info stored in the recently browsed item list
+	for the given provider URL or None if the item isn't found in the
+	recently browsed item list"""
+	
+	# Get clean copy of URL user has played.
+	decoded_url = String.Decode(str(url))
+
+	# Get list of items user has recently looked at.
+	browsedItems =  cerealizer.loads(Data.Load(BROWSED_ITEMS_KEY))
+	
+	# See if the URL being played is on our recently browsed list.
+	info = browsedItems.get(decoded_url)
+
+	if (info is None):
+		Log("****** ERROR: Watching Item which hasn't been browsed to")
+		return ""
+	
+	# Return the media info that was stored in the recently browsed item.
+	return JSON.StringFromObject(info[0])
+	
 @route('/video/lmwt/playback/{url}')
 def PlaybackStarted(url):
 
