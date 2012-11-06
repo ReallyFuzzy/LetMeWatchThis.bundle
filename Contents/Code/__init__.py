@@ -14,6 +14,8 @@ from BeautifulSoup  import BeautifulSoup
 # Non-standard imports.
 import Parsing
 
+import demjson
+
 from MetaProviders  import DBProvider, MediaInfo
 from RecentItems    import BrowsedItems, ViewedItems
 from Favourites     import FavouriteItems
@@ -23,8 +25,9 @@ cerealizer.register(MediaInfo)
 VIDEO_PREFIX = "/video/lmwt"
 NAME = L('Title')
 
-VERSION = "12.10.26.1"
+VERSION = "12.11.06.1"
 VERSION_URLS = {
+	"12.11.06.1": "http://bit.ly/Vy4Wfb",
 	"12.10.26.1": "http://bit.ly/PUBAWJ",
 	"12.10.22.1": "http://bit.ly/R7ZieU",
 	"12.10.16.2": "http://bit.ly/R7ZieU",
@@ -1014,7 +1017,7 @@ def SourcesMenu(mediainfo=None, url=None, item_name=None, path=[], parent_name=N
 			browsedItems =  cerealizer.loads(Data.Load(BROWSED_ITEMS_KEY))
 		else:
 			browsedItems = BrowsedItems()
-
+		
 		browsedItems.add(mediainfo2, providerURLs, path)
 		Data.Save(BROWSED_ITEMS_KEY, cerealizer.dumps(browsedItems))
 		
@@ -1841,7 +1844,7 @@ def MediaInfoLookup(url):
 		return ""
 	
 	# Return the media info that was stored in the recently browsed item.
-	return JSON.StringFromObject(info[0])
+	return demjson.encode(info[0])
 	
 @route('/video/lmwt/playback/{url}')
 def PlaybackStarted(url):
