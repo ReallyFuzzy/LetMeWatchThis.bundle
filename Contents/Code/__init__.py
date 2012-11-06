@@ -8,8 +8,6 @@ import base64
 
 from datetime       import date, datetime
 from dateutil       import tz
-from htmlentitydefs import name2codepoint as n2cp
-from urlparse       import urlparse
 
 from BeautifulSoup  import BeautifulSoup
 
@@ -651,14 +649,21 @@ def TVSeasonMenu(mediainfo=None, url=None, item_name=None, path=[], parent_name=
 	
 	# Retrieve the imdb id out as this is what favourites are keyed on and this is the
 	# first level where an item can be added to favourites.
-	mediainfo_meta = Parsing.GetMediaInfo(url, mediainfo)
+	mediainfo_meta = Parsing.GetMediaInfo(url, mediainfo, need_meta_retrieve(mediainfo.type))
 	
 	mediainfo.id = mediainfo_meta.id
 	mediainfo.background = mediainfo_meta.background
-	mediainfo.poster = mediainfo_meta.poster
 	mediainfo.summary = mediainfo_meta.summary
 	mediainfo.show_name = mediainfo_meta.show_name
 	
+	# When the passed in from favourites or Recently Watched, the mediainfo is for
+	# the episode actually watched. So, the poster will be for the ep, not the show.
+	# However, show info may have previously been retrieved. So use that if available.
+	if hasattr(mediainfo,'show_poster'):
+		mediainfo.poster = mediainfo.show_poster
+	else:
+		mediainfo.poster = mediainfo_meta.poster
+			
 	oc.add(
 		PopupDirectoryObject(
 			key=Callback(TVSeasonActionMenu, mediainfo=mediainfo, path=path),
@@ -682,7 +687,7 @@ def TVSeasonMenu(mediainfo=None, url=None, item_name=None, path=[], parent_name=
 		mediainfo_season.season = season
 		
 		# Does the meta provider have a poster for this season?
-		if (season in mediainfo_meta.season_posters):
+		if (hasattr(mediainfo_meta,"season_posters") and season in mediainfo_meta.season_posters):
 			# Yup. Use that.
 			mediainfo_season.poster = mediainfo_meta.season_posters[season]
 		
@@ -792,13 +797,17 @@ def TVSeasonShowsMenu(mediainfo=None, season_url=None,item_name=None, path=[], p
 	if (hist is not None):
 		indicator = "    "
 		
-	# Construct kwargs.
-	kwargs = {}
-	kwargs['imdb_id'] = mediainfo.id
-	kwargs['season'] = mediainfo.season
+	if (need_meta_retrieve(mediainfo.type)):
 	
-	mediainfo_meta = DBProvider().GetProvider(mediainfo.type).RetrieveItemFromProvider(**kwargs)
+		# Construct kwargs.
+		kwargs = {}
+		kwargs['imdb_id'] = mediainfo.id
+		kwargs['season'] = mediainfo.season
 	
+		mediainfo_meta = DBProvider().GetProvider(mediainfo.type).RetrieveItemFromProvider(**kwargs)
+	else:
+		mediainfo_meta = None
+		
 	# When the passed in from favourites or Recently Watched, the mediainfo is for
 	# the episode actually watched. So, the poster will be for the ep, not the season.
 	# Since, we've retrieved info about the season, use that as our opportunity to use
@@ -807,6 +816,9 @@ def TVSeasonShowsMenu(mediainfo=None, season_url=None,item_name=None, path=[], p
 		mediainfo.poster = mediainfo.season_poster
 	elif mediainfo_meta and mediainfo_meta.poster:
 		mediainfo.poster = mediainfo_meta.poster
+		
+	if (mediainfo_meta and not mediainfo.background and mediainfo_meta.background):
+		mediainfo.background = mediainfo_meta.background
 	
 	oc.add(
 		PopupDirectoryObject(
@@ -826,6 +838,7 @@ def TVSeasonShowsMenu(mediainfo=None, season_url=None,item_name=None, path=[], p
 				
 		# Does this LMWT episode actually exist according to meta provider?
 		if (
+			mediainfo_meta and
 			hasattr(mediainfo_meta,'season_episodes') and 
 			ep_num in mediainfo_meta.season_episodes
 		):
@@ -945,7 +958,7 @@ def SourcesMenu(mediainfo=None, url=None, item_name=None, path=[], parent_name=N
 	oc = ObjectContainer(view_group="List", title1=parent_name, title2=item_name)
 	
 	# Get as much meta data as possible about this item.
-	mediainfo2 = Parsing.GetMediaInfo(url, mediainfo)
+	mediainfo2 = Parsing.GetMediaInfo(url, mediainfo, need_meta_retrieve(mediainfo.type))
 		
 	# Did we get get any metadata back from meta data providers?
 	if (mediainfo2 is None or mediainfo2.id is None):
@@ -1909,30 +1922,6 @@ def VersionTrack():
 ###############################################################################
 # UTIL METHODS
 ###############################################################################
-# Substitute single HTML entity with match real character.
-
-def substitute_entity(match):
-	ent = match.group(3)
-	
-	if match.group(1) == "#":
-		if match.group(2) == '':
-			return unichr(int(ent))
-		elif match.group(2) == 'x':
-			return unichr(int('0x'+ent, 16))
-	else:
-		cp = n2cp.get(ent)
-
-		if cp:
-			return unichr(cp)
-		else:
-			return match.group()
-
-###############################################################################
-# Replace encoded HTML entities with matching real character.
-
-def decode_htmlentities(string):
-	entity_re = re.compile(r'&(#?)(x?)(\d{1,5}|\w{1,8});')
-	return entity_re.subn(substitute_entity, string)[0]
 
 ###############################################################################
 # 
@@ -1945,6 +1934,26 @@ def need_watched_indicator(type):
 		return True
 	
 	return False
+
+###############################################################################
+# 	
+def need_meta_retrieve(type):
+
+	"""
+	Returns a bool indicating whether the user has set preferences to
+	query a 3rd party metadata provider for the given media info type.
+	"""
+	if (Prefs['meta_retrieve'] == 'Disabled'):
+		return False
+	elif (Prefs['meta_retrieve'] == 'All'):
+		return True
+	elif (type == 'tv' and Prefs['meta_retrieve'] == 'TV Shows'):
+		return True
+	elif (type == 'movies' and Prefs['meta_retrieve'] == 'Movies'):
+		return True
+	else:
+		return False
+		
 
 ###############################################################################
 #

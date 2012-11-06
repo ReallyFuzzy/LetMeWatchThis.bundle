@@ -28,6 +28,13 @@
         "default": "Alphabetical"
     },
     {
+        "id": "meta_retrieve",
+        "type": "enum",
+        "label": "Retrieve metadata from external providers:",
+        "values": ["Disabled", "TV Shows", "Movies", "All"],
+        "default": "All"
+    },
+    {
         "id": "versiontracking",
         "type": "bool",
         "label": "Help measure interest in this plugin",
