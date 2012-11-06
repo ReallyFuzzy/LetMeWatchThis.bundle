@@ -1,5 +1,6 @@
 {
-"Title": "Let Me Watch This",
+"Title":"Let Me Watch This",
+"NoOpTitle":"----------------------",
 
 //================ Main Menu ===============
 "MoviesTitle":"Movies",
@@ -33,6 +34,8 @@
 "HistoryClearAllTitle":"Reset Viewing History",	
 "HistoryClearAllSummary":"Clears your Recently Watched list and resets all items to be unwatched",
 
+"HistoryRemove":"Remove from Recently Watched",
+
 "HistoryAddToFavourites":"Add to Favourites",
 "HistoryAddToFavouritesItem":"Add to Favourites - %s",
 "HistoryFavouriteAddedTitle":"Item added to Favourites",
@@ -40,9 +43,14 @@
 
 //========= Favourites Menu ============
 "FavouritesTitle":"Favourites",
+"FavouritesTitleNewOnly":"Favourites (New Items)",
+
+"FavouritesActionTitle":"Favourites Actions...",
+
+"FavouritesShowAll":"Show All",
+"FavouritesShowNew":"Show New Items Only",
 
 "FavouritesClearTitle":"Clear Favourites",
-"FavouritesClearSummary":"You can also remove a single Favourite item by selecting it from this list and selecting 'Remove from Favourites'",
 
 "FavouritesRemove":"Remove from Favourites",
 "FavouritesNewItemNotifyTurnOn":"Check for new unwatched items",
