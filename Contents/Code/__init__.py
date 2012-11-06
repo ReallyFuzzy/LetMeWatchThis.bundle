@@ -6,8 +6,6 @@ import copy
 import sys
 import base64
 
-import Parsing
-
 from datetime       import date, datetime
 from dateutil       import tz
 from htmlentitydefs import name2codepoint as n2cp
@@ -15,7 +13,10 @@ from urlparse       import urlparse
 
 from BeautifulSoup  import BeautifulSoup
 
-from MetaProviders  import MediaInfo
+# Non-standard imports.
+import Parsing
+
+from MetaProviders  import DBProvider, MediaInfo
 from RecentItems    import BrowsedItems, ViewedItems
 from Favourites     import FavouriteItems
 
@@ -124,7 +125,55 @@ def Start():
 	except:
 		Log("********** Need to remove Recently Watched / Viewing History as they are old type.")
 		Data.Remove(WATCHED_ITEMS_KEY)
-
+		
+	# We need to do a one off migration from storing season names to storing season numbers.
+	# Can remove once we have no users left on v.12.10.26.1 or below.
+	if ("FAVS_MIGRATION_1211" not in Dict):
+	
+		try:
+			favs = load_favourite_items()
+		
+			for fav in favs.get():
+		
+				if (
+					fav is not None and
+					fav.mediainfo.type == 'tv' and
+					hasattr(fav.mediainfo, "season") and
+					isinstance(fav.mediainfo.season, str)
+				):
+					match = re.search("(\d+)", fav.mediainfo.season)
+					if (match):
+						Log("SETTING SEASON TO " + match.group(1))
+						fav.mediainfo.season = int(match.group(1))
+					else:
+						fav.mediainfo.season = None
+					
+			save_favourite_items(favs)
+			
+			recents = load_watched_items()
+			
+			for recent in recents.get_recent():
+		
+				if (
+					recent is not None and
+					recent[0].type == 'tv' and
+					hasattr(recent[0], "season") and
+					isinstance(recent[0].season, str)
+				):
+					match = re.search("(\d+)", recent[0].season)
+					if (match):
+						Log("SETTING SEASON TO " + match.group(1))
+						recent[0].season = int(match.group(1))
+					else:
+						recent[0].season = None
+						
+			save_watched_items(recents)
+			
+			Dict['FAVS_MIGRATION_1211'] = True
+			
+		except Exception, ex:
+			Log(str(ex))
+		
 	Thread.Create(CheckForNewItemsInFavourites)
 	
 ####################################################################################################
@@ -585,6 +634,11 @@ def ItemsMenu(
 ####################################################################################################
 def TVSeasonMenu(mediainfo=None, url=None, item_name=None, path=[], parent_name=None):
 
+	# Clean up mediainfo that's been passed in from favourites as it will be
+	# keyed for a specifc ep and not a show.
+	mediainfo.season = None
+	mediainfo.ep_num = None
+	
 	if (item_name is not None):
 		mediainfo.show_name = item_name
 		
@@ -597,26 +651,46 @@ def TVSeasonMenu(mediainfo=None, url=None, item_name=None, path=[], parent_name=
 	
 	# Retrieve the imdb id out as this is what favourites are keyed on and this is the
 	# first level where an item can be added to favourites.
-	mediainfo.id = Parsing.GetMediaInfo(url, mediainfo.type).id
+	mediainfo_meta = Parsing.GetMediaInfo(url, mediainfo)
 	
-	#Log(mediainfo)
+	mediainfo.id = mediainfo_meta.id
+	mediainfo.background = mediainfo_meta.background
+	mediainfo.poster = mediainfo_meta.poster
+	mediainfo.summary = mediainfo_meta.summary
+	mediainfo.show_name = mediainfo_meta.show_name
 	
 	oc.add(
 		PopupDirectoryObject(
 			key=Callback(TVSeasonActionMenu, mediainfo=mediainfo, path=path),
 			title=L("TVSeasonActionTitle"),
+			art=mediainfo.background,
 			thumb=mediainfo.poster,
+			summary=mediainfo.summary,
 		)
 	)
 	
 	items = Parsing.GetTVSeasons("/" + url)
 	
 	for item in items:
+	
+		# Look for a real season number from the LMWT Season name.
+		season = int(re.match("Season (\d*)", item[0]).group(1))
+		
+		# Grab a copy of the current mediainfo and customise it to the current
+		# season, ready to be passed through to season show list.
+		mediainfo_season = copy.copy(mediainfo)
+		mediainfo_season.season = season
+		
+		# Does the meta provider have a poster for this season?
+		if (season in mediainfo_meta.season_posters):
+			# Yup. Use that.
+			mediainfo_season.poster = mediainfo_meta.season_posters[season]
+		
 		oc.add(
 			DirectoryObject(
 				key=Callback(
 					TVSeasonShowsMenu,
-					mediainfo=mediainfo,
+					mediainfo=mediainfo_season,
 					item_name=item[0],
 					season_url=item[1],
 					path=path,
@@ -625,8 +699,8 @@ def TVSeasonMenu(mediainfo=None, url=None, item_name=None, path=[], parent_name=
 				title=item[0],
 				tagline="",
 				summary="",
-				thumb=mediainfo.poster,
-				art="",
+				thumb=mediainfo_season.poster,
+				art=mediainfo_season.background,
 			)
 		)
 
@@ -698,10 +772,10 @@ def TVSeasonActionWatch(item_name=None, mediainfo=None, path=None, action="watch
 ####################################################################################################
 def TVSeasonShowsMenu(mediainfo=None, season_url=None,item_name=None, path=[], parent_name=None):
 
-	path = path + [{'elem':item_name,'season_url':season_url}]
+	# Clean up media info that's been passed in from favourites / recently watched.
+	mediainfo.ep_num = None
 	
-	if (item_name is not None):
-		mediainfo.season = item_name
+	path = path + [{'elem':item_name,'season_url':season_url}]
 
 	need_indicator = need_watched_indicator('tv')
 	
@@ -717,19 +791,53 @@ def TVSeasonShowsMenu(mediainfo=None, season_url=None,item_name=None, path=[], p
 	indicator = ""
 	if (hist is not None):
 		indicator = "    "
+		
+	# Construct kwargs.
+	kwargs = {}
+	kwargs['imdb_id'] = mediainfo.id
+	kwargs['season'] = mediainfo.season
+	
+	mediainfo_meta = DBProvider().GetProvider(mediainfo.type).RetrieveItemFromProvider(**kwargs)
+	
+	# When the passed in from favourites or Recently Watched, the mediainfo is for
+	# the episode actually watched. So, the poster will be for the ep, not the season.
+	# Since, we've retrieved info about the season, use that as our opportunity to use
+	# the correct poster.
+	if hasattr(mediainfo,'season_poster'):
+		mediainfo.poster = mediainfo.season_poster
+	elif mediainfo_meta and mediainfo_meta.poster:
+		mediainfo.poster = mediainfo_meta.poster
 	
 	oc.add(
 		PopupDirectoryObject(
 			key=Callback(TVSeasonShowsActionMenu, mediainfo=mediainfo, path=path),
 			title=indicator + str(L("TVSeasonShowsActionTitle")),
-			thumb= mediainfo.poster,
+			thumb=mediainfo.poster,
+			art=mediainfo.background,
 		)
 	)
-	
+
 	for item in Parsing.GetTVSeasonShows("/" + season_url):
 	
-		indicator = ''
+		ep_num = int(re.match("Episode (\d*)", item[0]).group(1))
 		
+		mediainfo_ep = copy.copy(mediainfo)
+		mediainfo_ep.ep_num = ep_num
+				
+		# Does this LMWT episode actually exist according to meta provider?
+		if (
+			hasattr(mediainfo_meta,'season_episodes') and 
+			ep_num in mediainfo_meta.season_episodes
+		):
+			mediainfo_ep.summary = mediainfo_meta.season_episodes[ep_num]['summary']
+			mediainfo_ep.title = "Episode " + str(ep_num) + " - " + mediainfo_meta.season_episodes[ep_num]['title']
+			if mediainfo_meta.season_episodes[ep_num]['poster']:
+				mediainfo_ep.poster = mediainfo_meta.season_episodes[ep_num]['poster']
+		else:
+			mediainfo_ep.summary = ""
+			mediainfo_ep.title = item[0]
+		
+		indicator = ''
 		if (hist is not None):
 			watched = hist.has_been_watched(item[1])
 			if (watched):
@@ -741,17 +849,17 @@ def TVSeasonShowsMenu(mediainfo=None, season_url=None,item_name=None, path=[], p
 			DirectoryObject(
 				key=Callback(
 					SourcesMenu,
-					mediainfo=mediainfo,
+					mediainfo=mediainfo_ep,
 					url=item[1],
 					item_name=item[0],
 					path=path,
 					parent_name=oc.title2,
 				),
-				title=indicator + item[0],
-				tagline=mediainfo.title,
-				summary="",
-				thumb= mediainfo.poster,
-				art="",		
+				title=indicator + mediainfo_ep.title,
+				tagline=mediainfo_ep.title,
+				summary=mediainfo_ep.summary,
+				thumb=mediainfo_ep.poster,
+				art=mediainfo_ep.background,
 			)
 		)
 			
@@ -783,7 +891,7 @@ def TVSeasonShowsActionMenu(mediainfo, path):
 	mediainfo.summary = None
 
 	# Come up with a nice easy title for later.
-	mediainfo.title = mediainfo.show_name + " - " + mediainfo.season
+	mediainfo.title = mediainfo.show_name + " - Season " + str(mediainfo.season)
 
 	fav_path = [item for item in path if ('season_url' in item or 'show_url' in item)]
 	oc.add(
@@ -837,8 +945,8 @@ def SourcesMenu(mediainfo=None, url=None, item_name=None, path=[], parent_name=N
 	oc = ObjectContainer(view_group="List", title1=parent_name, title2=item_name)
 	
 	# Get as much meta data as possible about this item.
-	mediainfo2 = Parsing.GetMediaInfo(url, mediainfo.type)
-	
+	mediainfo2 = Parsing.GetMediaInfo(url, mediainfo)
+		
 	# Did we get get any metadata back from meta data providers?
 	if (mediainfo2 is None or mediainfo2.id is None):
 		# If not, use the information we've collected along the way.
@@ -894,9 +1002,7 @@ def SourcesMenu(mediainfo=None, url=None, item_name=None, path=[], parent_name=N
 		else:
 			browsedItems = BrowsedItems()
 
-		
 		browsedItems.add(mediainfo2, providerURLs, path)
-		
 		Data.Save(BROWSED_ITEMS_KEY, cerealizer.dumps(browsedItems))
 		
 		#Log("Browsed items: " + str(browsedItems))
@@ -1051,12 +1157,18 @@ def HistoryMenu(parent_name=None):
 		mediainfo = item[0]
 		navpath = item[1]
 			
-		title = '' 
+		title = ''
+		poster = mediainfo.poster
+		
 		if (mediainfo.type == 'tv'):
 			
 			# If the item is a TV show, come up with sensible display info
 			# that matches the requested grouping.
 			summary = None
+
+			if hasattr(mediainfo,"show_poster"):
+				poster = mediainfo.show_poster
+			
 			if (mediainfo.show_name is not None):
 				title = mediainfo.show_name
 				
@@ -1064,10 +1176,16 @@ def HistoryMenu(parent_name=None):
 				(Prefs['watched_grouping'] == 'Season' or Prefs['watched_grouping'] == 'Episode') and
 				mediainfo.season is not None
 			):
-				title = title + ' - ' + mediainfo.season
+				title += ' - Season ' + str(mediainfo.season)
+				
+				# If we have a season poster available, use that rather than show's poster.
+				#Log("Checking for season poster.....")
+				if hasattr(mediainfo,"season_poster") and mediainfo.season_poster:
+					poster = mediainfo.season_poster
 				
 			if (Prefs['watched_grouping'] == 'Episode'):
 				title = title + ' - ' + mediainfo.title
+				poster = mediainfo.poster
 				summary = mediainfo.summary
 				
 		else:
@@ -1080,7 +1198,7 @@ def HistoryMenu(parent_name=None):
 				title=title,
 				summary=summary,
 				art=mediainfo.background,
-				thumb= mediainfo.poster,
+				thumb=poster,
 				duration=mediainfo.duration,
 				
 			)
@@ -1193,7 +1311,7 @@ def HistoryNavPathMenu(mediainfo, navpath, parent_name):
 		# If we have a season URL, take user to episode listing for that season.
 		elif ("season_url" in item):
 			if (Prefs['watched_grouping'] == 'Season' or Prefs['watched_grouping'] == 'Episode'):
-				callback = Callback(TVSeasonShowsMenu, mediainfo=mediainfo, season_url=item['season_url'], item_name=mediainfo.season, path=ordered_path, parent_name=oc.title2)
+				callback = Callback(TVSeasonShowsMenu, mediainfo=mediainfo, season_url=item['season_url'], item_name="Season " + str(mediainfo.season), path=ordered_path, parent_name=oc.title2)
 			else:
 				continue
 		
@@ -1215,7 +1333,7 @@ def HistoryNavPathMenu(mediainfo, navpath, parent_name):
 	oc.add(
 		DirectoryObject(
 			key=Callback(NoOpMenu),
-			title='----------------------'
+			title=L("NoOpTitle")
 		)
 	)
 	
@@ -1223,7 +1341,7 @@ def HistoryNavPathMenu(mediainfo, navpath, parent_name):
 	oc.add(
 		DirectoryObject(
 			key=Callback(HistoryRemoveFromRecent, mediainfo=mediainfo, path=path, parent_name=oc.title2),
-			title="Remove from Recently Watched"
+			title=L("HistoryRemove")
 		)
 	)
 			
@@ -1242,7 +1360,10 @@ def HistoryNavPathMenu(mediainfo, navpath, parent_name):
 		if (Prefs['watched_grouping'] != 'Show'):
 		
 			mediainfo_season = copy.copy(mediainfo)
-			mediainfo_season.title = mediainfo.show_name + ' - ' + mediainfo.season
+			mediainfo_season.title = mediainfo.show_name + ' - Season ' + str(mediainfo.season)
+			if hasattr(mediainfo_season,"season_poster") and mediainfo_season.season_poster:
+				mediainfo_season.poster = mediainfo_season.season_poster
+				
 			path = [item for item in navpath if ('season_url' in item or 'show_url' in item)]
 			oc.add(
 				DirectoryObject(
@@ -1253,6 +1374,10 @@ def HistoryNavPathMenu(mediainfo, navpath, parent_name):
 			
 		mediainfo.title = mediainfo.show_name
 		mediainfo.season = None
+		
+		if hasattr(mediainfo,"show_poster") and mediainfo.show_poster:
+				mediainfo.poster = mediainfo.show_poster
+		
 		path = [item for item in navpath if ('show_url' in item)]
 		
 		if (Prefs['watched_grouping'] == 'Show'):
@@ -1312,15 +1437,28 @@ def HistoryAddToFavouritesMenu(mediainfo, path, parent_name):
 ####################################################################################################
 # FAVOURITES MENUS
 ####################################################################################################
-def FavouritesMenu(parent_name=None):
+def FavouritesMenu(parent_name=None, new_items_only=None):
 
 	oc = ObjectContainer(no_cache=True, view_group="InfoList", title1=parent_name, title2=L("FavouritesTitle"))
+	
+	oc.replace_parent = new_items_only is not None
+	
+	if (new_items_only):
+		oc.title2 = L("FavouritesTitleNewOnly")
 	
 	sort_order = FavouriteItems.SORT_DEFAULT
 	if (Prefs['favourite_sort'] == 'Alphabetical'):
 		sort_order = FavouriteItems.SORT_ALPHABETICAL
 	elif (Prefs['favourite_sort'] == 'Most Recently Used'):
 		sort_order = FavouriteItems.SORT_MRU
+		
+	oc.add(
+		PopupDirectoryObject(
+			key=Callback(FavouritesActionMenu, parent_name=parent_name,new_items_only=new_items_only),
+			title=L("FavouritesActionTitle"),
+			thumb="",
+		)
+	)
 		
 	favs = load_favourite_items().get(sort=sort_order)
 	
@@ -1333,6 +1471,9 @@ def FavouritesMenu(parent_name=None):
 		title = mediainfo.title
 		if (item.new_item):
 			title = title + " - New Item(s)"
+		else:
+			if (new_items_only):
+				continue
 				
 		# If the item is a TV show, come up with sensible display name.
 		summary = ""
@@ -1364,12 +1505,41 @@ def FavouritesMenu(parent_name=None):
 			)
 		)
 			
+	return oc
+
+####################################################################################################
+
+def FavouritesActionMenu(parent_name=None, new_items_only=False):
+
+	oc = ObjectContainer(no_cache=True, view_group="InfoList", title1="", title2="Clear All Your Favourites?")
+
+	if new_items_only:
+		oc.add(
+			DirectoryObject(
+				key=Callback(FavouritesMenu, parent_name=parent_name, new_items_only=False),
+				title=L("FavouritesShowAll")
+			)
+		)
+	else:
+		oc.add(
+			DirectoryObject(
+				key=Callback(FavouritesMenu, parent_name=parent_name, new_items_only=True),
+				title=L("FavouritesShowNew")
+			)
+		)
+
+	
 	oc.add(
 		DirectoryObject(
-			key=Callback(FavouritesClearMenu),
-			title=L("FavouritesClearTitle"),
-			summary=L("FavouritesClearSummary"),
-			thumb=""
+			key=Callback(NoOpMenu),
+			title=L("NoOpTitle")
+		)
+	)
+
+	oc.add(
+		DirectoryObject(
+			key=Callback(FavouritesClearMenu, parent_name=parent_name),
+			title=L("FavouritesClearTitle")
 		)
 	)
 		
@@ -1377,12 +1547,13 @@ def FavouritesMenu(parent_name=None):
 
 ####################################################################################################
 
-def FavouritesClearMenu():
-
+def FavouritesClearMenu(parent_name=None):
+	
 	Data.Remove(FAVOURITE_ITEMS_KEY)
 	
-	oc = FavouritesMenu()
+	oc = FavouritesMenu(parent_name=parent_name)
 	oc.replace_parent = True
+		
 	return oc
 
 ####################################################################################################
@@ -1426,7 +1597,7 @@ def FavouritesNavPathMenu(mediainfo=None, path=None, new_item_check=None, parent
 		
 		# If we have a season URL, take user to episode listing for that season.
 		elif ("season_url" in item):
-			callback = Callback(TVSeasonShowsMenu, mediainfo=mediainfo, season_url=item['season_url'], item_name=mediainfo.season, path=ordered_path, parent_name=oc.title2)
+			callback = Callback(TVSeasonShowsMenu, mediainfo=mediainfo, season_url=item['season_url'], item_name="Season " + str(mediainfo.season), path=ordered_path, parent_name=oc.title2)
 		
 		oc.add(
 			DirectoryObject(
@@ -1438,7 +1609,7 @@ def FavouritesNavPathMenu(mediainfo=None, path=None, new_item_check=None, parent
 	oc.add(
 		DirectoryObject(
 			key=Callback(NoOpMenu),
-			title='----------------------'
+			title=L("NoOpTitle")
 		)
 	)
 	
