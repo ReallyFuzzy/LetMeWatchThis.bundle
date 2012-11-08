@@ -25,8 +25,9 @@ cerealizer.register(MediaInfo)
 VIDEO_PREFIX = "/video/lmwt"
 NAME = L('Title')
 
-VERSION = "12.11.06.1"
+VERSION = "12.11.06.2"
 VERSION_URLS = {
+	"12.11.06.2": "http://bit.ly/Vy4Wfb",
 	"12.11.06.1": "http://bit.ly/Vy4Wfb",
 	"12.10.26.1": "http://bit.ly/PUBAWJ",
 	"12.10.22.1": "http://bit.ly/R7ZieU",
