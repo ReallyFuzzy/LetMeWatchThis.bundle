@@ -16,6 +16,8 @@ import Parsing
 
 import demjson
 
+import Notifier
+
 from MetaProviders  import DBProvider, MediaInfo
 from RecentItems    import BrowsedItems, ViewedItems
 from Favourites     import FavouriteItems
@@ -1787,6 +1789,24 @@ def CheckForNewItemsInFavourite(favourite, force=False):
 			pass
 		finally:
 			Thread.ReleaseLock(FAVOURITE_ITEMS_KEY)
+		
+		# If user has requested email to be sent, do it now, but only if check wasn't
+		# forced (i.e: happened as part of regular checks rather than a force recalculation
+		# of whether any new eps are still available because the user has watched one).
+		try:
+			if (len(new_items) > 0 and Prefs['favourite_notify_email'] and not Force):
+				Log('Notifying about new item for title: ' + favourite.mediainfo.title)
+				Notifier.notify(
+					Prefs['favourite_notify_email'],
+					favourite.mediainfo.title,
+					favourite.mediainfo.poster
+				)
+		except Exception, ex:
+			Log("ERROR Whilst sending email notification about " + favourite.mediainfo.title)
+			Log(str(ex))
+			pass
+		
+			
 
 	
 ####################################################################################################

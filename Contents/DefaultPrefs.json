@@ -28,6 +28,12 @@
         "default": "Alphabetical"
     },
     {
+        "id": "favourite_notify_email",
+        "type": "text",
+        "label": "Email to notify when new Favourites are found:",
+        "default": ""
+    },
+    {
         "id": "meta_retrieve",
         "type": "enum",
         "label": "Retrieve metadata from external providers:",
