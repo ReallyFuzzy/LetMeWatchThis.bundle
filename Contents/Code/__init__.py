@@ -245,13 +245,19 @@ def VideoMainMenu():
 		)
 	)
 
-	
 	oc.add(
 		PrefsObject(
 			title=L("PrefsTitle"),
 			tagline=L("PrefsSubtitle"),
 			summary=L("PrefsSummary"),
 			thumb=R(PREFS_ICON)
+		)
+	)
+	
+	oc.add(
+		DirectoryObject(
+			key=Callback(TestEmailMenu),
+			title="Send Test Email",
 		)
 	)
 	
@@ -283,6 +289,27 @@ def VideoMainMenu():
 		
 	return oc
 
+def TestEmailMenu():
+
+	oc = ObjectContainer(no_cache=True)
+	
+	if (not Prefs[ "favourite_notify_email"]):
+		oc.header="No email address set"
+		oc.message="Please set an email address to send notifications to in the Preferences."
+		return oc
+		
+	try:
+		Notifier.notify(Prefs[ "favourite_notify_email"],"TEST","http://www.bankerssupply.net/Images/placeholder.jpg")
+		
+		oc.header="Email Sent"
+		oc.message="A Test Email has been sent to " + Prefs[ "favourite_notify_email"] + ".\n" + "It will probably be in your Junk / Spam folder. Add sender to your contacts to prevent it from going there."
+
+	except Exception, ex:
+		oc.header = "An Error Occurred"
+		oc.message = "The logs should have a bit more info about what went wrong."
+		
+	return oc
+	
 ####################################################################################################
 # Menu users seen when they select Update in main menu.
 
