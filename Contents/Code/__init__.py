@@ -1821,7 +1821,7 @@ def CheckForNewItemsInFavourite(favourite, force=False):
 		# forced (i.e: happened as part of regular checks rather than a force recalculation
 		# of whether any new eps are still available because the user has watched one).
 		try:
-			if (len(new_items) > 0 and Prefs['favourite_notify_email'] and not Force):
+			if (len(new_items) > 0 and Prefs['favourite_notify_email'] and not force):
 				Log('Notifying about new item for title: ' + favourite.mediainfo.title)
 				Notifier.notify(
 					Prefs['favourite_notify_email'],
