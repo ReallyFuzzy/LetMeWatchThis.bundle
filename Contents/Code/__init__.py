@@ -8,6 +8,7 @@ import base64
 
 from datetime       import date, datetime
 from dateutil       import tz
+from sets           import Set
 
 from BeautifulSoup  import BeautifulSoup
 
@@ -66,6 +67,8 @@ FEATURED_ICON='icon-featured.png'
 STANDUP_ICON='icon-standup.png'
 GENRE_BASE='icon-genre'
 GENRE_ICON=GENRE_BASE + '.png'
+TAG_ICON='icon-tag-%s.png'
+TAG_ICON_COLOUR=['red','orange','yellow','green','cyan','blue','purple']
 
 BROWSED_ITEMS_KEY = "RECENT_BROWSED_ITEMS"
 WATCHED_ITEMS_KEY = "USER_VIEWING_HISTORY"
@@ -1483,14 +1486,20 @@ def HistoryAddToFavouritesMenu(mediainfo, path, parent_name):
 ####################################################################################################
 # FAVOURITES MENUS
 ####################################################################################################
-def FavouritesMenu(parent_name=None, new_items_only=None):
+def FavouritesMenu(parent_name=None,label=None, new_items_only=None, replace_parent=False):
 
-	oc = ObjectContainer(no_cache=True, view_group="InfoList", title1=parent_name, title2=L("FavouritesTitle"))
+	oc = ObjectContainer(
+		no_cache=True, view_group="InfoList", replace_parent=replace_parent,
+		title1=parent_name, title2=L("FavouritesTitle")
+	)
 	
-	oc.replace_parent = new_items_only is not None
-	
-	if (new_items_only):
-		oc.title2 = L("FavouritesTitleNewOnly")
+	if label:
+		oc.title2 = label
+		if new_items_only:
+			oc.title2 =  label + " (New Items)"
+	else:
+		if new_items_only:
+			oc.title2 =  L("FavouritesTitleNewOnly")
 	
 	sort_order = FavouriteItems.SORT_DEFAULT
 	if (Prefs['favourite_sort'] == 'Alphabetical'):
@@ -1500,17 +1509,60 @@ def FavouritesMenu(parent_name=None, new_items_only=None):
 		
 	oc.add(
 		PopupDirectoryObject(
-			key=Callback(FavouritesActionMenu, parent_name=parent_name,new_items_only=new_items_only),
+			key=Callback(
+				FavouritesActionMenu,
+				parent_name=parent_name,
+				new_items_only=new_items_only,
+				label=label,
+			),
 			title=L("FavouritesActionTitle"),
 			thumb="",
 		)
 	)
 		
-	favs = load_favourite_items().get(sort=sort_order)
+	favs = load_favourite_items()
+	
+	if (not label):
+	
+		cnt = 0
+		
+		for existing_label in favs.get_labels():
+		
+			new_item = len([x for x in favs.get_favourites_for_label(existing_label) if x.new_item]) > 0
+			
+			if (not new_item and new_items_only):
+				continue
+
+			new_item_label = " - New Items" if new_item else ""
+			
+			oc.add(
+				DirectoryObject(
+					key=Callback(
+						FavouritesMenu,
+						parent_name=oc.title2,
+						new_items_only=new_items_only,
+						label=existing_label
+					),
+					title=existing_label + new_item_label + " >",
+					thumb=R(TAG_ICON % TAG_ICON_COLOUR[cnt])
+				)
+			)
+			
+			cnt = (cnt + 1) % len(TAG_ICON_COLOUR)
 	
 	# For each favourite item....
-	for item in favs:
+	for item in favs.get(sort=sort_order):
+	
+		Log(item.mediainfo.title)
 		
+		# If a label has been given, see if the item has the current label. 
+		if (label and label not in item.labels):
+			continue
+			
+		# If no label has been given, check that the item also has no label
+		if (not label and len(item.labels) > 0):
+			continue
+			
 		mediainfo = item.mediainfo
 		navpath = item.path
 		
@@ -1555,21 +1607,31 @@ def FavouritesMenu(parent_name=None, new_items_only=None):
 
 ####################################################################################################
 
-def FavouritesActionMenu(parent_name=None, new_items_only=False):
+def FavouritesActionMenu(parent_name=None, new_items_only=False, label=None):
 
 	oc = ObjectContainer(no_cache=True, view_group="InfoList", title1="", title2="Clear All Your Favourites?")
 
 	if new_items_only:
 		oc.add(
 			DirectoryObject(
-				key=Callback(FavouritesMenu, parent_name=parent_name, new_items_only=False),
+				key=Callback(
+					FavouritesMenu,
+					parent_name=parent_name,
+					new_items_only=False,
+					replace_parent=True,
+					label=label),
 				title=L("FavouritesShowAll")
 			)
 		)
 	else:
 		oc.add(
 			DirectoryObject(
-				key=Callback(FavouritesMenu, parent_name=parent_name, new_items_only=True),
+				key=Callback(
+					FavouritesMenu,
+					parent_name=parent_name,
+					new_items_only=True,
+					replace_parent=True,
+					label=label),
 				title=L("FavouritesShowNew")
 			)
 		)
@@ -1661,6 +1723,13 @@ def FavouritesNavPathMenu(mediainfo=None, path=None, new_item_check=None, parent
 	
 	oc.add(
 		DirectoryObject(
+			key=Callback(FavouritesLabelsItemMenu, parent_name=oc.title2, mediainfo=mediainfo),
+			title="Labels...",
+		)
+	)
+	
+	oc.add(
+		DirectoryObject(
 			key=Callback(FavouritesRemoveItemMenu, mediainfo=mediainfo),
 			title=L("FavouritesRemove"),
 		)
@@ -1681,6 +1750,98 @@ def FavouritesNavPathMenu(mediainfo=None, path=None, new_item_check=None, parent
 	
 	return oc
 
+####################################################################################################
+
+def FavouritesLabelsItemMenu(mediainfo, parent_name):
+
+	# Load up Favourites.
+	favs = load_favourite_items() 
+		
+	oc = ObjectContainer(no_cache=True, title1=parent_name, title2="Labels for " + mediainfo.title)
+	
+	oc.add(
+		InputDirectoryObject(
+			key=Callback(FavouritesLabelAddMenu, mediainfo=mediainfo),
+			title="Add New Label...",
+			prompt="Enter new label name"
+		)
+	)
+	
+	fav = favs.get(mediainfo)[0]
+	
+	for label in favs.get_labels():
+				
+		# Check if the passed in favourite already has this label.
+		prefix = "    " if (not label in fav.labels) else u"\u00F8  "
+			
+		oc.add(
+			DirectoryObject(
+				key=Callback(FavouritesLabelToggle, label=label, mediainfo=mediainfo),
+				title= prefix + label
+			)
+		)
+		
+	return oc
+
+####################################################################################################
+	
+def FavouritesLabelAddMenu(query, mediainfo):
+
+	Thread.AcquireLock(FAVOURITE_ITEMS_KEY)
+	try:
+		favs = load_favourite_items()
+		fav = favs.get(mediainfo)[0]
+		Log(fav)
+		Log(fav.labels)
+		if (query not in fav.labels):
+			Log("Adding label")
+			fav.labels.append(query)
+		save_favourite_items(favs)
+	except Exception, ex:
+		Log(ex)
+		pass		
+	finally:
+		Thread.ReleaseLock(FAVOURITE_ITEMS_KEY)
+
+	oc = ObjectContainer()
+	oc.header = "Label Added"
+	oc.message = "New label '" + query + "' has been added."
+	
+	return oc
+
+####################################################################################################
+	
+def FavouritesLabelToggle(label, mediainfo):
+
+	oc = ObjectContainer(no_cache=True)
+	
+	Thread.AcquireLock(FAVOURITE_ITEMS_KEY)
+	
+	try:
+	
+		# Load up Favourites.
+		favs = load_favourite_items() 
+		fav = favs.get(mediainfo)[0]
+	
+		if (label not in fav.labels):
+			fav.labels.append(label)
+			oc.header = "Label Added"
+			oc.message = "Label '" + label + "' added to '" + mediainfo.title + "'"
+		else:
+			fav.labels.remove(label)
+			oc.header = "Label Removed"
+			oc.message = "Label '" + label + "' removed from '" + mediainfo.title + "'"
+			
+		save_favourite_items(favs)
+		
+	except Exception, ex:
+		Log(ex)
+		pass		
+	finally:
+		Thread.ReleaseLock(FAVOURITE_ITEMS_KEY)
+		
+	return oc
+	
 ####################################################################################################
 
 def FavouritesRemoveItemMenu(mediainfo):
@@ -1713,7 +1874,7 @@ def FavouritesNotifyMenu(mediainfo=None):
 	
 	Thread.AcquireLock(FAVOURITE_ITEMS_KEY)
 	try:
-		favs = load_favourite_items(lock=True)
+		favs = load_favourite_items()
 		fav = favs.get(mediainfo=mediainfo)[0]
 		
 		# Are we turning it on or off?
@@ -1821,7 +1982,7 @@ def CheckForNewItemsInFavourite(favourite, force=False):
 		# forced (i.e: happened as part of regular checks rather than a force recalculation
 		# of whether any new eps are still available because the user has watched one).
 		try:
-			if (len(new_items) > 0 and Prefs['favourite_notify_email'] and not Force):
+			if (len(new_items) > 0 and Prefs['favourite_notify_email'] and not force):
 				Log('Notifying about new item for title: ' + favourite.mediainfo.title)
 				Notifier.notify(
 					Prefs['favourite_notify_email'],
@@ -2025,7 +2186,7 @@ def save_watched_items(hist):
 	
 ###############################################################################
 #
-def load_favourite_items(lock=False):
+def load_favourite_items():
 
 	if (Data.Exists(FAVOURITE_ITEMS_KEY)):
 		favs = cerealizer.loads(Data.Load(FAVOURITE_ITEMS_KEY))
