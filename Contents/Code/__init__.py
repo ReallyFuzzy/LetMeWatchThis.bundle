@@ -6,7 +6,7 @@ import copy
 import sys
 import base64
 
-from datetime       import date, datetime
+from datetime       import date, datetime, timedelta
 from dateutil       import tz
 from sets           import Set
 
@@ -18,6 +18,7 @@ import Parsing
 import demjson
 
 import Notifier
+import lmwt_utils
 
 from MetaProviders  import DBProvider, MediaInfo
 from RecentItems    import BrowsedItems, ViewedItems
@@ -181,13 +182,18 @@ def Start():
 		except Exception, ex:
 			Log(str(ex))
 		
-	Thread.Create(CheckForNewItemsInFavourites)
+	StartFavouritesCheck()
 	
 ####################################################################################################
 # see:
 #  http://dev.plexapp.com/docs/Functions.html#ValidatePrefs
 
 def ValidatePrefs():
+
+	if (Prefs['favourite_notify_email']):
+		lmwt_utils.add_favourites_cron(Platform.OS, VIDEO_PREFIX)
+	else:
+		lmwt_utils.del_favourites_cron(Platform.OS, VIDEO_PREFIX)
 
 	pass
 
@@ -1921,6 +1927,13 @@ def NoOpMenu():
 # FAVOURITE UTILS
 ####################################################################################################
 
+@route('/video/lmwt/favourites/check')
+def StartFavouritesCheck():
+
+	CheckForNewItemsInFavourites()
+	return ""
+
+
 def CheckForNewItemsInFavourites():
 
 	favs = load_favourite_items().get()
@@ -1928,17 +1941,23 @@ def CheckForNewItemsInFavourites():
 	for fav in favs:
 		CheckForNewItemsInFavourite(fav)
 		
-	# Re-check in 12 hour.
-	Thread.CreateTimer(12 * 60 * 60, CheckForNewItemsInFavourites)
-
 	
 def CheckForNewItemsInFavourite(favourite, force=False):
 	
 	#Log("Processing favourite: " + str(favourite.mediainfo))
+	#Log("Favourite Last Checktime: " + str(favourite.date_last_item_check))
 	
 	# Do we want to check this favourite for updates?
 	# If so, only bother if it's not already marked as having updates.
-	if (favourite.new_item_check and (favourite.new_item == False or force)):
+	# and hasn't been checked in the last 12 hours.
+	if (
+		force or
+		(
+			favourite.new_item_check and
+			not favourite.new_item and
+			(datetime.utcnow() - favourite.date_last_item_check) > timedelta(hours=12)
+		)
+	):
 	
 		#Log("Checking for new item in favourite")
 		
