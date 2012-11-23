@@ -33,6 +33,12 @@
         "label": "Email to notify when new Favourites are found:",
         "default": ""
     },
+   {
+        "id": "favourite_notify_email_test",
+        "type": "bool",
+        "label": "Send Test Email",
+        "default": "false"
+    },
     {
         "id": "meta_retrieve",
         "type": "enum",

@@ -110,6 +110,18 @@ def ValidatePrefs():
 
 	if (Prefs['favourite_notify_email']):
 		Utils.add_favourites_cron(Platform.OS, NAME, VIDEO_PREFIX)
+		
+		if (Prefs['favourite_notify_email_test']):
+			try:
+				Notifier.notify(
+					Prefs[ "favourite_notify_email"],
+					str(NAME),
+					"TEST",
+					"data:image/jpeg;base64,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"
+				)
+			except Exception, ex:
+				pass
+				
 	else:
 		Utils.del_favourites_cron(Platform.OS, NAME, VIDEO_PREFIX)
 
@@ -177,13 +189,6 @@ def VideoMainMenu():
 		)
 	)
 	
-	oc.add(
-		DirectoryObject(
-			key=Callback(TestEmailMenu),
-			title="Send Test Email",
-		)
-	)
-	
 	# Get latest version number of plugin.
 	try:
 	
@@ -209,30 +214,6 @@ def VideoMainMenu():
 			
 	except Exception, ex:
 		Log("******** Error retrieving and processing latest version information. Exception is:\n" + str(ex))
-		
-	return oc
-
-####################################################################################################
-# Menu users seen when they select Send Test Email in Preferences menu.
-
-def TestEmailMenu():
-
-	oc = ObjectContainer(no_cache=True)
-	
-	if (not Prefs[ "favourite_notify_email"]):
-		oc.header="No email address set"
-		oc.message="Please set an email address to send notifications to in the Preferences."
-		return oc
-		
-	try:
-		Notifier.notify(Prefs[ "favourite_notify_email"],"TEST","http://www.bankerssupply.net/Images/placeholder.jpg")
-		
-		oc.header="Email Sent"
-		oc.message="A Test Email has been sent to " + Prefs[ "favourite_notify_email"] + ".\n" + "It will probably be in your Junk / Spam folder. Add sender to your contacts to prevent it from going there."
-
-	except Exception, ex:
-		oc.header = "An Error Occurred"
-		oc.message = "The logs should have a bit more info about what went wrong."
 		
 	return oc
 	
@@ -1861,6 +1842,7 @@ def CheckForNewItemsInFavourite(favourite, force=False):
 				Log('Notifying about new item for title: ' + favourite.mediainfo.title)
 				Notifier.notify(
 					Prefs['favourite_notify_email'],
+					str(NAME),
 					favourite.mediainfo.title,
 					favourite.mediainfo.poster
 				)

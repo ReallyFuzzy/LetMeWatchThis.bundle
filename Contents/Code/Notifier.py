@@ -44,14 +44,14 @@ except Exception, ex:
 	Log(str(ex))
 	pass	
 	
-def notify(recipient, title, img_src):
-
+def notify(recipient, name, title, img_src):
+	
 	# Build Message up.
 	recipients = [recipient]
-	sender = 'LMWT Plex Plugin <plex_lmwt@lmwt.example.com>'
+	sender = str(name) + ' Plex Plugin <favourites@' +  str(name).lower().replace(" ","") + '.example.com>'
 	
 	msg = MIMEMultipart('alternative')
-	msg['Subject'] = '[Plex LMWT] New episode of ' + title + ' available'
+	msg['Subject'] = '[Plex ' + str(name) + '] New episode of ' + title + ' available'
 	msg['From'] = sender
 	msg['To'] = recipients[0]
 	
@@ -59,13 +59,13 @@ def notify(recipient, title, img_src):
 	<html><BODY><table width=95%%><tr>
 	  <td width="5%%" style="padding-right: 20px"><img src="%s" height=200></td>
 	  <td valign="top">
-	  A new episode of %s has been found on LMWT.<p>
-	  You can now watch this via your Favourites in Plex's LetMeWatchThis plugin.<p>
+	  A new episode of %s has been found on %s.<p>
+	  You can now watch this via your Favourites in Plex's %s plugin.<p>
 	  You will not be notified about any additional new episodes until you have watched or mark as watched all new episodes in Plex. 
 	  </td>
 	</tr></table></body></html>
 	""")
-	body = body % (img_src, title)
+	body = body % (img_src, title, str(name), str(name))
 	
 	msg.attach(MIMEText(body,'html'))
 
