@@ -1779,7 +1779,7 @@ def NoOpMenu():
 # FAVOURITE UTILS
 ####################################################################################################
 
-@route('/video/lmwt/favourites/check')
+@route(VIDEO_PREFIX + '/favourites/check')
 def StartFavouritesCheck():
 
 	CheckForNewItemsInFavourites()
