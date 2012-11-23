@@ -109,9 +109,9 @@ def Start():
 def ValidatePrefs():
 
 	if (Prefs['favourite_notify_email']):
-		Utils.add_favourites_cron(Platform.OS, VIDEO_PREFIX)
+		Utils.add_favourites_cron(Platform.OS, NAME, VIDEO_PREFIX)
 	else:
-		Utils.del_favourites_cron(Platform.OS, VIDEO_PREFIX)
+		Utils.del_favourites_cron(Platform.OS, NAME, VIDEO_PREFIX)
 
 ####################################################################################################
 # Main navigtion menu
