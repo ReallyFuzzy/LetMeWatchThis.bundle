@@ -18,7 +18,8 @@ import Parsing
 import demjson
 
 import Notifier
-import lmwt_utils
+import Site
+import Utils
 
 from MetaProviders  import DBProvider, MediaInfo
 from RecentItems    import BrowsedItems, ViewedItems
@@ -26,31 +27,17 @@ from Favourites     import FavouriteItems
 
 cerealizer.register(MediaInfo)
 
-VIDEO_PREFIX = "/video/lmwt"
+VIDEO_PREFIX = Site.VIDEO_PREFIX
 NAME = L('Title')
 
-VERSION = "12.11.06.2"
-VERSION_URLS = {
-	"12.11.06.2": "http://bit.ly/Vy4Wfb",
-	"12.11.06.1": "http://bit.ly/Vy4Wfb",
-	"12.10.26.1": "http://bit.ly/PUBAWJ",
-	"12.10.22.1": "http://bit.ly/R7ZieU",
-	"12.10.16.2": "http://bit.ly/R7ZieU",
-	"12.10.16.1": "http://bit.ly/R7ZieU",
-	"12.08.01.1": "http://bit.ly/NUNueE",
-	"12.07.25.1": "http://bit.ly/OZBBRR",
-	"12.07.19.1": "http://bit.ly/MxCuqr",
-	"12.05.28.1": "http://bit.ly/JJvDZO",
-	"12.05.01.1": "http://bit.ly/IpYhy9",
-	"12.04.18.1": "http://bit.ly/JajQNI",
-	"12.02.28.1": "http://bit.ly/yzepjl",
-	"12.02.18.1": "http://bit.ly/y3LvHD",
-	"1.2" : "http://bit.ly/wCczFy",
-	"1.1" : "http://bit.ly/Acjmo5",
-	"1.0" : "http://bit.ly/ypSj0G"
-}
+# Plugin interest tracking.
+VERSION = Site.VERSION
+VERSION_URLS = Site.VERSION_URLS
 
-LATEST_VERSION_URL = 'https://bit.ly/xoGzzQ'
+LATEST_VERSION_URL = Site.LATEST_VERSION_URL
+
+LATEST_VERSION = 'LATEST_VERSION'
+LATEST_VERSION_SUMMARY = 'LATEST_VERSION_SUMMARY'
 
 # make sure to replace artwork with what you want
 # these filenames reference the example files in
@@ -61,10 +48,7 @@ APP_ICON = 'icon-default.png'
 PREFS_ICON = 'icon-prefs.png'
 SEARCH_ICON='icon-search.png'
 MOVIE_ICON='icon-movie.png'
-MOVIE_HD_ICON='icon-movie-hd.png'
 TV_ICON='icon-tv.png'
-AZ_ICON='icon-az.png'
-FEATURED_ICON='icon-featured.png'
 STANDUP_ICON='icon-standup.png'
 GENRE_BASE='icon-genre'
 GENRE_ICON=GENRE_BASE + '.png'
@@ -101,8 +85,8 @@ def Start():
 	DirectoryItem.thumb = R(APP_ICON)
 	VideoItem.thumb = R(APP_ICON)
 	
-	DirectoryObject.thumb = R(APP_ICON)
-	VideoClipObject.thumb = R(APP_ICON)
+	#DirectoryObject.thumb = R(APP_ICON)
+	#VideoClipObject.thumb = R(APP_ICON)
 	
 	HTTP.CacheTime = CACHE_1HOUR
 	HTTP.Headers['User-agent'] = USER_AGENT
@@ -112,75 +96,9 @@ def Start():
 	
 	if (Prefs['versiontracking'] == True):
 		Thread.Create(VersionTrack)
-		
-	# Check the favourite object and viewing history object are of the right type.
-	# This should be a one-off hit as we migrate to new data structure.
-	try: 
-		if (type(load_favourite_items()) is not FavouriteItems):
-			Log("********** Need to remove favourites as they are old type.")
-			Data.Remove(FAVOURITE_ITEMS_KEY)
-	except:
-		# Let's be aggressive about this. Something went wrong, let's assume it's do
-		# with the stored data being wrong somehow.
-		Log("********** Need to remove favourites as they are old type.")
-		Data.Remove(FAVOURITE_ITEMS_KEY)
-		pass
-		
-	try:
-		if (not hasattr(load_watched_items(), "recent_items")):
-			Log("********** Need to remove Recently Watched / Viewing History as they are old type.")
-			Data.Remove(WATCHED_ITEMS_KEY)
-	except:
-		Log("********** Need to remove Recently Watched / Viewing History as they are old type.")
-		Data.Remove(WATCHED_ITEMS_KEY)
-		
-	# We need to do a one off migration from storing season names to storing season numbers.
-	# Can remove once we have no users left on v.12.10.26.1 or below.
-	if ("FAVS_MIGRATION_1211" not in Dict):
 	
-		try:
-			favs = load_favourite_items()
-		
-			for fav in favs.get():
-		
-				if (
-					fav is not None and
-					fav.mediainfo.type == 'tv' and
-					hasattr(fav.mediainfo, "season") and
-					isinstance(fav.mediainfo.season, str)
-				):
-					match = re.search("(\d+)", fav.mediainfo.season)
-					if (match):
-						Log("SETTING SEASON TO " + match.group(1))
-						fav.mediainfo.season = int(match.group(1))
-					else:
-						fav.mediainfo.season = None
-					
-			save_favourite_items(favs)
-			
-			recents = load_watched_items()
-			
-			for recent in recents.get_recent():
-		
-				if (
-					recent is not None and
-					recent[0].type == 'tv' and
-					hasattr(recent[0], "season") and
-					isinstance(recent[0].season, str)
-				):
-					match = re.search("(\d+)", recent[0].season)
-					if (match):
-						Log("SETTING SEASON TO " + match.group(1))
-						recent[0].season = int(match.group(1))
-					else:
-						recent[0].season = None
-						
-			save_watched_items(recents)
-			
-			Dict['FAVS_MIGRATION_1211'] = True
-			
-		except Exception, ex:
-			Log(str(ex))
+	if hasattr(Site, 'Start'):
+		Site.Start()
 		
 	StartFavouritesCheck()
 	
@@ -191,11 +109,9 @@ def Start():
 def ValidatePrefs():
 
 	if (Prefs['favourite_notify_email']):
-		lmwt_utils.add_favourites_cron(Platform.OS, VIDEO_PREFIX)
+		Utils.add_favourites_cron(Platform.OS, VIDEO_PREFIX)
 	else:
-		lmwt_utils.del_favourites_cron(Platform.OS, VIDEO_PREFIX)
-
-	pass
+		Utils.del_favourites_cron(Platform.OS, VIDEO_PREFIX)
 
 ####################################################################################################
 # Main navigtion menu
@@ -236,8 +152,6 @@ def VideoMainMenu():
 				thumb=R("History.png"),
 			)
 		)
-		
-	
 	
 	title = str(L("Favourites"))
 
@@ -298,6 +212,9 @@ def VideoMainMenu():
 		
 	return oc
 
+####################################################################################################
+# Menu users seen when they select Send Test Email in Preferences menu.
+
 def TestEmailMenu():
 
 	oc = ObjectContainer(no_cache=True)
@@ -351,159 +268,106 @@ def TypeMenu(type=None, genre=None, path=[], parent_name=None):
 
 	oc = ObjectContainer(no_cache=True, title1=parent_name, title2=mcTitle2, view_group="InfoList")
 	
-	oc.add(
-		DirectoryObject(
-			key=Callback(
-				ItemsMenu,type=type,
-				genre=genre,
-				sort="views",
-				section_name="Popular",
-				path=path,
-				parent_name=oc.title2,
-			),
-			title="Popular",
-			tagline="",
-			summary="List of most popular " + type_desc,
-			thumb=R("Popular.png"),
-			art=R(ART)	
-		)
-	)
-
-	oc.add(
-		DirectoryObject(
-			key=Callback(
-				ItemsMenu,
-				type=type,
-				genre=genre,
-				sort="featured",
-				section_name="Featured",
-				path=path,
-				parent_name=oc.title2,
-			),
-			title="Featured",
-			tagline="",
-			summary="List of featured " + type_desc,
-			thumb=R(FEATURED_ICON),
-			art=R(ART)	
-		)
-	)
-
-	oc.add(
-		DirectoryObject(
-			key=Callback(
-				ItemsMenu,
-				type=type,
-				genre=genre,
-				sort="ratings",
-				section_name="Highly Rated",
-				path=path,
-				parent_name=oc.title2,
-			),
-			title="Highly Rated",
-			tagline="",
-			summary="List of highly rated " + type_desc,
-			thumb=R("Favorite.png"),
-			art=R(ART)
-		)
-	)
+	for section in Site.GetSections(type, genre):
 	
-	oc.add(
-		DirectoryObject(
-			key=Callback(
-				ItemsMenu,
-				type=type,
-				genre=genre,
-				sort='date',
-				section_name="Recently Added",
-				path=path,
-				parent_name=oc.title2,
-			),
-			title="Recently Added",
-			tagline="",
-			summary="List of recently added " + type_desc,
-			thumb=R("History.png"),
-			art=R(ART)
-		)
-	)
+		if (section['type'] == 'items'):
 		
-	oc.add(
-		DirectoryObject(
-			key=Callback(
-				ItemsMenu,
-				type=type,
-				genre=genre,
-				sort='release',
-				section_name="Latest Releases",
-				path=path,
-				parent_name=oc.title2,
-			),
-			title="Latest Releases",
-			tagline="",
-			summary="List of latest releases",
-			thumb=R("Recent.png"),
-			art=R(ART)
-		)
-	)
-	
-	if genre is None:
+			oc.add(
+				DirectoryObject(
+					key=Callback(
+						ItemsMenu,type=type,
+						genre=genre,
+						sort=section['sort'],
+						section_name=section['title'],
+						path=path,
+						parent_name=oc.title2,
+					),
+					title=section['title'],
+					tagline="",
+					summary=section['summary'],
+					thumb=section['icon'],
+					art=R(ART)	
+				)
+			)
+		
+		elif (section['type'] == 'type'):
+				
+			oc.add(
+				DirectoryObject(
+					key=Callback(
+						TypeMenu,
+						type=type,
+						genre=section['genre'],
+						path=path,
+						parent_name=oc.title2,
+					),
+					title=section['title'],
+					summary=section['summary'],
+					thumb=section['icon'],
+					art=R(ART),
+				)
+			)
 			
-		oc.add(
-			DirectoryObject(
-				key=Callback(
-					GenreMenu,
-					type=type,
-					path=path,
-					parent_name=oc.title2,
-				),
-				title="Genre",
-				tagline=type_desc +" by genre",
-				summary="Browse " + type_desc + " by genre.",
-				thumb=R(GENRE_ICON),
-				art=R(ART),
+		elif (section['type'] == 'genre'):
+		
+			oc.add(
+				DirectoryObject(
+					key=Callback(
+						GenreMenu,
+						type=type,
+						path=path,
+						parent_name=oc.title2,
+					),
+					title=section['title'],
+					summary=section['summary'],
+					thumb=section['icon'],
+					art=R(ART),
+				)
 			)
-		)
+			
+		elif (section['type'] == 'alphabet'):
 		
-	oc.add(
-		DirectoryObject(
-			key=Callback(
-				AZListMenu,
-				type=type,
-				genre=genre,
-				path=path,
-				parent_name=oc.title2,
-			),
-			title="A-Z List",
-			tagline="Complete list of " + type_desc,
-			summary="Browse " + type_desc + " in alphabetical order",
-			thumb=R(AZ_ICON),
-			art=R(ART)
-		)
-	)
-		
-	if genre is None:
-		
-		oc.add(
-			InputDirectoryObject(
-				key=Callback(
-					SearchResultsMenu,
-					type=type,
-					parent_name=oc.title2,
-				),
-				title="Search",
-				tagline="Search for a title using this feature",
-				summary="Search for a title using this feature",
-				prompt="Please enter a search term",
-				thumb=R(SEARCH_ICON),
-				art=R(ART)				
+			oc.add(
+				DirectoryObject(
+					key=Callback(
+						AZListMenu,
+						type=type,
+						genre=genre,
+						path=path,
+						parent_name=oc.title2,
+						thumb=section['icon']
+					),
+					title=section['title'],
+					summary=section['summary'],
+					thumb=section['icon'],
+					art=R(ART)
+				)
 			)
-		)
-	
+			
+		elif (section['type'] == 'search'):
+		
+			oc.add(
+				InputDirectoryObject(
+					key=Callback(
+						SearchResultsMenu,
+						type=type,
+						parent_name=oc.title2,
+					),
+					title="Search",
+					tagline="Search for a title using this feature",
+					summary="Search for a title using this feature",
+					prompt="Please enter a search term",
+					thumb=R(SEARCH_ICON),
+					art=R(ART)				
+				)
+			)
+		
 	return oc
 
 
 ####################################################################################################
 
-def AZListMenu(type=None, genre=None, path=None, parent_name=None):
+def AZListMenu(type=None, genre=None, path=None, parent_name=None, thumb=None):
 
 	oc = ObjectContainer(view_group="InfoList", title1=parent_name, title2="A-Z")
 	azList = ['123','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z']
@@ -524,7 +388,7 @@ def AZListMenu(type=None, genre=None, path=None, parent_name=None):
 				title=value,
 				tagline="Complete collection arranged alphabetically",
 				summary="Browse items starting with " + value,
-				thumb=R(AZ_ICON),
+				thumb=thumb,
 				art=R(ART),
 			)
 		)
@@ -536,14 +400,8 @@ def AZListMenu(type=None, genre=None, path=None, parent_name=None):
 def GenreMenu(type=None, path=None, parent_name=None):
 
 	oc = ObjectContainer(no_cache=True, title1=parent_name,title2="Genre", view_group="InfoList")
-	
-	genres = [
-		"Action", "Adventure", "Animation", "Biography", "Comedy", "Crime", "Documentary", "Drama",
-		"Family", "Fantasy", "History", "Horror", "Japanese", "Korean", "Music", "Musical", "Mystery",
-		"Romance", "Sci-Fi", "Short", "Sport", "Thriller", "War", "Western", "Zombies"
-	]
-	
-	for genre in genres:
+		
+	for genre in Site.GetGenres():
 	
 		icon = R(GENRE_BASE + "-" + genre.lower() + ".png")
 		if icon is None:
@@ -720,12 +578,11 @@ def TVSeasonMenu(mediainfo=None, url=None, item_name=None, path=[], parent_name=
 	
 	for item in items:
 	
-		# Look for a real season number from the LMWT Season name.
-		season = int(re.match("Season (\d*)", item[0]).group(1))
-		
 		# Grab a copy of the current mediainfo and customise it to the current
 		# season, ready to be passed through to season show list.
 		mediainfo_season = copy.copy(mediainfo)
+		
+		season = item['season_number'] if 'season_number' in item else None
 		mediainfo_season.season = season
 		
 		# Does the meta provider have a poster for this season?
@@ -736,14 +593,14 @@ def TVSeasonMenu(mediainfo=None, url=None, item_name=None, path=[], parent_name=
 		oc.add(
 			DirectoryObject(
 				key=Callback(
-					TVSeasonShowsMenu,
+					TVSeasonEpsMenu,
 					mediainfo=mediainfo_season,
-					item_name=item[0],
-					season_url=item[1],
+					item_name=item['season_name'],
+					season_url=item['season_url'],
 					path=path,
 					parent_name=oc.title2,
 				),
-				title=item[0],
+				title=item['season_name'],
 				tagline="",
 				summary="",
 				thumb=mediainfo_season.poster,
@@ -806,18 +663,18 @@ def TVSeasonActionWatch(item_name=None, mediainfo=None, path=None, action="watch
 	
 		item_path = copy.copy(base_path)
 		item_mediainfo = copy.copy(mediainfo)
-		item_mediainfo.season = item[0]
-		item_path.append({ 'elem': item[0], 'season_url': item[1] })
+		item_mediainfo.season = item['season_name']
+		item_path.append({ 'elem': item['season_name'], 'season_url': item['season_url'] })
 		items.append([item_mediainfo, item_path])
 		
 	# Mark them as watched / unwatched.
-	return TVSeasonShowsActionWatch(item_name=item_name, items=items, action=action)
+	return TVSeasonEpsActionWatch(item_name=item_name, items=items, action=action)
 
 
 ####################################################################################################
-# TV SEASON SHOWS MENUS
+# TV SEASON EPISODES MENUS
 ####################################################################################################
-def TVSeasonShowsMenu(mediainfo=None, season_url=None,item_name=None, path=[], parent_name=None):
+def TVSeasonEpsMenu(mediainfo=None, season_url=None,item_name=None, path=[], parent_name=None):
 
 	# Clean up media info that's been passed in from favourites / recently watched.
 	mediainfo.ep_num = None
@@ -840,13 +697,7 @@ def TVSeasonShowsMenu(mediainfo=None, season_url=None,item_name=None, path=[], p
 		indicator = "    "
 		
 	if (need_meta_retrieve(mediainfo.type)):
-	
-		# Construct kwargs.
-		kwargs = {}
-		kwargs['imdb_id'] = mediainfo.id
-		kwargs['season'] = mediainfo.season
-	
-		mediainfo_meta = DBProvider().GetProvider(mediainfo.type).RetrieveItemFromProvider(**kwargs)
+		mediainfo_meta = Parsing.GetMediaInfo(season_url, mediainfo, True)
 	else:
 		mediainfo_meta = None
 		
@@ -864,18 +715,19 @@ def TVSeasonShowsMenu(mediainfo=None, season_url=None,item_name=None, path=[], p
 	
 	oc.add(
 		PopupDirectoryObject(
-			key=Callback(TVSeasonShowsActionMenu, mediainfo=mediainfo, path=path),
-			title=indicator + str(L("TVSeasonShowsActionTitle")),
+			key=Callback(TVSeasonEpsActionMenu, mediainfo=mediainfo, path=path),
+			title=indicator + str(L("TVSeasonEpsActionTitle")),
 			thumb=mediainfo.poster,
 			art=mediainfo.background,
 		)
 	)
 
-	for item in Parsing.GetTVSeasonShows("/" + season_url):
+	for item in Parsing.GetTVSeasonEps("/" + season_url):
 	
-		ep_num = int(re.match("Episode (\d*)", item[0]).group(1))
-		
 		mediainfo_ep = copy.copy(mediainfo)
+		
+		# Do we have a sane episode number extracted out?
+		ep_num = item['ep_num'] if ('ep_num' in item) else None
 		mediainfo_ep.ep_num = ep_num
 				
 		# Does this LMWT episode actually exist according to meta provider?
@@ -890,11 +742,11 @@ def TVSeasonShowsMenu(mediainfo=None, season_url=None,item_name=None, path=[], p
 				mediainfo_ep.poster = mediainfo_meta.season_episodes[ep_num]['poster']
 		else:
 			mediainfo_ep.summary = ""
-			mediainfo_ep.title = item[0]
+			mediainfo_ep.title = item['ep_name']
 		
 		indicator = ''
 		if (hist is not None):
-			watched = hist.has_been_watched(item[1])
+			watched = hist.has_been_watched(item['ep_url'])
 			if (watched):
 				indicator = '    '
 			else:
@@ -905,8 +757,8 @@ def TVSeasonShowsMenu(mediainfo=None, season_url=None,item_name=None, path=[], p
 				key=Callback(
 					SourcesMenu,
 					mediainfo=mediainfo_ep,
-					url=item[1],
-					item_name=item[0],
+					url=item['ep_url'],
+					item_name=item['ep_name'],
 					path=path,
 					parent_name=oc.title2,
 				),
@@ -922,21 +774,21 @@ def TVSeasonShowsMenu(mediainfo=None, season_url=None,item_name=None, path=[], p
 
 ####################################################################################################
 
-def TVSeasonShowsActionMenu(mediainfo, path):
+def TVSeasonEpsActionMenu(mediainfo, path):
 
 	oc = ObjectContainer(view_group="InfoList", title1="", title2="Season Actions")
 	
 	if (Prefs['watched_indicator'] != 'Disabled'):
 		oc.add(
 			DirectoryObject(
-				key=Callback(TVSeasonShowsActionWatch, item_name=path[-1]['elem'], items=[[mediainfo, path]], action="watch"),
+				key=Callback(TVSeasonEpsActionWatch, item_name=path[-1]['elem'], items=[[mediainfo, path]], action="watch"),
 				title="Mark All Episodes as Watched",
 			)
 		)
 	
 		oc.add(
 			DirectoryObject(
-				key=Callback(TVSeasonShowsActionWatch, item_name=path[-1]['elem'], items=[[mediainfo, path]], action="unwatch"),
+				key=Callback(TVSeasonEpsActionWatch, item_name=path[-1]['elem'], items=[[mediainfo, path]], action="unwatch"),
 				title="Mark All Episodes as Unwatched",
 			)
 		)
@@ -960,7 +812,7 @@ def TVSeasonShowsActionMenu(mediainfo, path):
 
 ####################################################################################################
 
-def TVSeasonShowsActionWatch(item_name=None, items=None, action="watch"):
+def TVSeasonEpsActionWatch(item_name=None, items=None, action="watch"):
 
 	episode_items = []
 	
@@ -975,11 +827,11 @@ def TVSeasonShowsActionWatch(item_name=None, items=None, action="watch"):
 		episode_paths = []
 		
 		# Get a list of all the episodes for this season.
-		for item in Parsing.GetTVSeasonShows("/" + season_url):
+		for ep in Parsing.GetTVSeasonEps("/" + season_url):
 		
-			item_path = copy.copy(base_path)
-			item_path.append({ 'elem': item[0], 'url': item[1] })
-			episode_paths.append(item_path)
+			ep_path = copy.copy(base_path)
+			ep_path.append({ 'elem': ep['ep_name'], 'url': ep['ep_url'] })
+			episode_paths.append(ep_path)
 		
 		episode_items.append([mediainfo, episode_paths])
 		
@@ -1036,9 +888,6 @@ def SourcesMenu(mediainfo=None, url=None, item_name=None, path=[], parent_name=N
 	providerURLs = []
 	for source_item in Parsing.GetSources(url):
 	
-		if (source_item['quality'] == "sponsored"):
-			continue
-					
 		mediaItem = GetItemForSource(mediainfo=mediainfo2, source_item=source_item)
 		
 		if mediaItem is not None:
@@ -1366,7 +1215,7 @@ def HistoryNavPathMenu(mediainfo, navpath, parent_name):
 		# If we have a season URL, take user to episode listing for that season.
 		elif ("season_url" in item):
 			if (Prefs['watched_grouping'] == 'Season' or Prefs['watched_grouping'] == 'Episode'):
-				callback = Callback(TVSeasonShowsMenu, mediainfo=mediainfo, season_url=item['season_url'], item_name="Season " + str(mediainfo.season), path=ordered_path, parent_name=oc.title2)
+				callback = Callback(TVSeasonEpsMenu, mediainfo=mediainfo, season_url=item['season_url'], item_name="Season " + str(mediainfo.season), path=ordered_path, parent_name=oc.title2)
 			else:
 				continue
 		
@@ -1711,7 +1560,7 @@ def FavouritesNavPathMenu(mediainfo=None, path=None, new_item_check=None, parent
 		
 		# If we have a season URL, take user to episode listing for that season.
 		elif ("season_url" in item):
-			callback = Callback(TVSeasonShowsMenu, mediainfo=mediainfo, season_url=item['season_url'], item_name="Season " + str(mediainfo.season), path=ordered_path, parent_name=oc.title2)
+			callback = Callback(TVSeasonEpsMenu, mediainfo=mediainfo, season_url=item['season_url'], item_name="Season " + str(mediainfo.season), path=ordered_path, parent_name=oc.title2)
 		
 		oc.add(
 			DirectoryObject(
@@ -1797,11 +1646,14 @@ def FavouritesLabelAddMenu(query, mediainfo):
 	try:
 		favs = load_favourite_items()
 		fav = favs.get(mediainfo)[0]
-		Log(fav)
-		Log(fav.labels)
+		
+		#Log("Adding label to: " + str(fav))
+		#Log("Current labels: " + str(fav.labels))
+
 		if (query not in fav.labels):
-			Log("Adding label")
+			#Log("Adding label" + query)
 			fav.labels.append(query)
+			
 		save_favourite_items(favs)
 	except Exception, ex:
 		Log(ex)
@@ -1904,7 +1756,7 @@ def FavouritesNotifyMenu(mediainfo=None):
 			url = [v for k,v in fav.path[-1].items() if (k == 'show_url' or k == 'season_url')][0]
 			
 			# Get URLs of all the shows for the current favourite.
-			fav.items = [show[1] for show in Parsing.GetTVSeasonShows(url)]
+			fav.items = [show['ep_url'] for show in Parsing.GetTVSeasonEps(url)]
 			
 			fav.date_last_item_check = datetime.utcnow()
 			oc.message = "Plugin will check for new items and notify you when one is available.\nNote that this may slow down the plugin at startup."
@@ -1934,6 +1786,8 @@ def StartFavouritesCheck():
 	return ""
 
 
+####################################################################################################
+
 def CheckForNewItemsInFavourites():
 
 	favs = load_favourite_items().get()
@@ -1941,7 +1795,9 @@ def CheckForNewItemsInFavourites():
 	for fav in favs:
 		CheckForNewItemsInFavourite(fav)
 		
-	
+
+####################################################################################################
+
 def CheckForNewItemsInFavourite(favourite, force=False):
 	
 	#Log("Processing favourite: " + str(favourite.mediainfo))
@@ -1965,7 +1821,7 @@ def CheckForNewItemsInFavourite(favourite, force=False):
 		url = [v for k,v in favourite.path[-1].items() if (k == 'show_url' or k == 'season_url')][0]
 	
 		# Get up-to-date list of shows available for the current favourite.
-		items = [show[1] for show in Parsing.GetTVSeasonShows(url)]
+		items = [show['ep_url'] for show in Parsing.GetTVSeasonEps(url)]
 					
 		# Are there any items in the current show list which aren't in the fav's show list?
 		# Note that all of these should automatically be unwatched since as items are watched,
@@ -2012,10 +1868,8 @@ def CheckForNewItemsInFavourite(favourite, force=False):
 			Log("ERROR Whilst sending email notification about " + favourite.mediainfo.title)
 			Log(str(ex))
 			pass
-		
 			
-
-	
+			
 ####################################################################################################
 # Params:
 #   mediainfo: A MediaInfo item for the current LMWT item being viewed (either a movie or single episode).
@@ -2031,7 +1885,7 @@ def GetItemForSource(mediainfo, source_item):
 	# the provider was supported but not visible. Maybe user still wants to see them?
 	if (Prefs['show_unsupported']):
 		return DirectoryObject(
-			key = Callback(PlayVideoNotSupported, mediainfo = mediainfo, url = source_item['url']),
+			key = Callback(PlayVideoNotSupported, mediainfo = mediainfo),
 			title = source_item['name'] + " - " + source_item['provider_name'] + " (Not playable)",
 			summary= mediainfo.summary,
 			art=mediainfo.background,
@@ -2043,15 +1897,17 @@ def GetItemForSource(mediainfo, source_item):
 	
 ####################################################################################################
 	
-def PlayVideoNotSupported(mediainfo, url):
+def PlayVideoNotSupported(mediainfo):
 
 	return ObjectContainer(
 		header='Provider is either not currently supported or has been disabled in preferences...',
 		message='',
 	)
-	
 
-@route('/video/lmwt/mediainfo/{url}')
+
+####################################################################################################
+
+@route(VIDEO_PREFIX + '/mediainfo/{url}')
 def MediaInfoLookup(url):
 
 	""" Returns the media info stored in the recently browsed item list
@@ -2060,7 +1916,8 @@ def MediaInfoLookup(url):
 	
 	# Get clean copy of URL user has played.
 	decoded_url = String.Decode(str(url))
-
+	#Log(decoded_url)
+	
 	# Get list of items user has recently looked at.
 	browsedItems =  cerealizer.loads(Data.Load(BROWSED_ITEMS_KEY))
 	
@@ -2073,8 +1930,10 @@ def MediaInfoLookup(url):
 	
 	# Return the media info that was stored in the recently browsed item.
 	return demjson.encode(info[0])
-	
-@route('/video/lmwt/playback/{url}')
+
+####################################################################################################
+
+@route(VIDEO_PREFIX + '/playback/{url}')
 def PlaybackStarted(url):
 
 	# Nothing to do. User doesn't want any tracking.
@@ -2140,7 +1999,9 @@ def PlaybackStarted(url):
 	#Log("Viewing history: " + str(hist))
 	
 	return ""
-	
+
+####################################################################################################
+
 def VersionTrack():
 
 	try:
