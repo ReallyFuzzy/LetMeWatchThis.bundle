@@ -1,0 +1,5 @@
+NOTIFY_SMTP_SERVER = "smtp.gmail.com"
+NOTIFY_SMTP_SERVER_PORT = 587
+NOTIFY_SMTP_USER = "user.name@gmail.com"
+NOTIFY_SMTP_PASS = "password"
+NOTIFY_SMTP_TLS = True

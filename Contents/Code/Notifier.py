@@ -21,7 +21,7 @@ try:
 	
 	NOTIFY_SMTP_SERVER = NotifierEmailSettings.NOTIFY_SMTP_SERVER
 	
-	if (hasattr(NotifierEmailSettings, "NOTIFY_SMTP_SERVER_USER")):
+	if (hasattr(NotifierEmailSettings, "NOTIFY_SMTP_USER")):
 		# Assume if user / password is a combo.
 		NOTIFY_SMTP_USER = NotifierEmailSettings.NOTIFY_SMTP_USER
 		NOTIFY_SMTP_PASS = NotifierEmailSettings.NOTIFY_SMTP_PASS
