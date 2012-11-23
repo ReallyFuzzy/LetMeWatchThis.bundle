@@ -35,7 +35,7 @@ def add_favourites_cron(platform, name, prefix):
 	if (platform == "MacOSX" or platform == "Linux"):
 	
 		# Check if we already have an entry....
-		cmd = 'crontab -l | grep "http://localhost:32400' + prefix + '/favourites/check";'
+		cmd = 'crontab -l | grep "http://localhost:32400' + str(prefix) + '/favourites/check";'
 		cmd += 'if [ $? != 0 ]; then '
 		
 		# Entry doesn't exist. Get user's crontab.
@@ -48,10 +48,10 @@ def add_favourites_cron(platform, name, prefix):
 		cmd += "cat"
 		
 		# Then add a comment.
-		cmd += ';echo "# PLEX ' + name + ' New Favourites check"'
+		cmd += ';echo "# PLEX ' + str(name) + ' New Favourites check"'
 		
 		# Then add actual crontab entry.
-		cmd += ';echo "* */1 * * * curl http://localhost:32400' + prefix + '/favourites/check";'
+		cmd += ';echo "15 */1 * * * curl http://localhost:32400' + str(prefix) + '/favourites/check";'
 		
 		# Finished with that group. Send it back to crontab as stdin.
 		cmd += ") | "
@@ -74,8 +74,8 @@ def add_favourites_cron(platform, name, prefix):
 			'schtasks',
 			'/create',
 			'/sc','HOURLY',
-			'/tn','PLEX ' + name + ' New Favourites Check',
-			'/tr','"' + plugin_script + '" ' + 'http://localhost:32400' + prefix + '/favourites/check'
+			'/tn','PLEX ' + str(name) + ' New Favourites Check',
+			'/tr','"' + plugin_script + '" ' + 'http://localhost:32400' + str(prefix) + '/favourites/check'
 		]
 		
 		subprocess.call(cmd)
@@ -90,8 +90,8 @@ def del_favourites_cron(platform, name, prefix):
 		cmd = "crontab -l"
 			
 		# Grep out the lines we added
-		cmd += '| grep -v "# PLEX ' + name + ' New Favourites check"'
-		cmd += '| grep -v "curl http://localhost:32400' + prefix + '/favourites/check"'
+		cmd += '| grep -v "# PLEX ' + str(name) + ' New Favourites check"'
+		cmd += '| grep -v "curl http://localhost:32400' + str(prefix) + '/favourites/check"'
 		
 		# Install new crontab from stdin.
 		cmd += "| crontab"
@@ -103,7 +103,7 @@ def del_favourites_cron(platform, name, prefix):
 		cmd = [
 			'schtasks',
 			'/delete',
-			'/tn','PLEX ' + name + ' New Favourites Check',
+			'/tn','PLEX ' + str(name) + ' New Favourites Check',
 			'/F'
 		]
 		
