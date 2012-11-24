@@ -3,8 +3,9 @@ VIDEO_PREFIX = "/video/lmwt"
 LATEST_VERSION_URL = 'https://bit.ly/xoGzzQ'
 
 # Plugin interest tracking.
-VERSION = "12.11.06.2"
+VERSION = "12.11.24.1"
 VERSION_URLS = {
+	"12.11.24.1": "http://bit.ly/WojpGg",
 	"12.11.06.2": "http://bit.ly/Vy4Wfb",
 	"12.11.06.1": "http://bit.ly/Vy4Wfb",
 	"12.10.26.1": "http://bit.ly/PUBAWJ",
