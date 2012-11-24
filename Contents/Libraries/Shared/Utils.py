@@ -51,7 +51,7 @@ def add_favourites_cron(platform, name, prefix):
 		cmd += ';echo "# PLEX ' + str(name) + ' New Favourites check"'
 		
 		# Then add actual crontab entry.
-		cmd += ';echo "15 * * * * curl http://localhost:32400' + str(prefix) + '/favourites/check";'
+		cmd += ';echo "15 * * * * curl http://localhost:32400' + str(prefix) + '/favourites/check >dev/null 2>&1";'
 		
 		# Finished with that group. Send it back to crontab as stdin.
 		cmd += ") | "
