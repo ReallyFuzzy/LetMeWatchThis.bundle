@@ -149,6 +149,9 @@ def GetSources(url):
 		quality = re.search("quality_(.*)", quality_elem['class']).group(1)
 		source['quality'] = quality
 		
+		if (quality == 'sponsored'):
+			continue
+				
 		# Extract out source provider name.
 		provider_name = None
 		prov_name_tag = item.find('span', { 'class': 'version_host' })
