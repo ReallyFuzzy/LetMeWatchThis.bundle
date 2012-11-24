@@ -1594,16 +1594,16 @@ def FavouritesNavPathMenu(mediainfo=None, path=None, new_item_check=None, parent
 
 ####################################################################################################
 
-def FavouritesLabelsItemMenu(mediainfo, parent_name):
+def FavouritesLabelsItemMenu(mediainfo, parent_name, replace_parent=False):
 
 	# Load up Favourites.
 	favs = load_favourite_items() 
 		
-	oc = ObjectContainer(no_cache=True, title1=parent_name, title2="Labels for " + mediainfo.title)
+	oc = ObjectContainer(no_cache=True, replace_parent=replace_parent, title1=parent_name, title2="Labels for " + mediainfo.title)
 	
 	oc.add(
 		InputDirectoryObject(
-			key=Callback(FavouritesLabelAddMenu, mediainfo=mediainfo),
+			key=Callback(FavouritesLabelAddMenu, mediainfo=mediainfo, parent_name=parent_name),
 			title="Add New Label...",
 			prompt="Enter new label name"
 		)
@@ -1618,7 +1618,7 @@ def FavouritesLabelsItemMenu(mediainfo, parent_name):
 			
 		oc.add(
 			DirectoryObject(
-				key=Callback(FavouritesLabelToggle, label=label, mediainfo=mediainfo),
+				key=Callback(FavouritesLabelToggle, label=label, mediainfo=mediainfo, parent_name=parent_name),
 				title= prefix + label
 			)
 		)
@@ -1627,7 +1627,7 @@ def FavouritesLabelsItemMenu(mediainfo, parent_name):
 
 ####################################################################################################
 	
-def FavouritesLabelAddMenu(query, mediainfo):
+def FavouritesLabelAddMenu(query, mediainfo, parent_name):
 
 	Thread.AcquireLock(FAVOURITE_ITEMS_KEY)
 	try:
@@ -1648,17 +1648,11 @@ def FavouritesLabelAddMenu(query, mediainfo):
 	finally:
 		Thread.ReleaseLock(FAVOURITE_ITEMS_KEY)
 
-	oc = ObjectContainer()
-	oc.header = "Label Added"
-	oc.message = "New label '" + query + "' has been added."
-	
-	return oc
+	return FavouritesLabelsItemMenu(mediainfo, parent_name, True)
 
 ####################################################################################################
 	
-def FavouritesLabelToggle(label, mediainfo):
-
-	oc = ObjectContainer(no_cache=True)
+def FavouritesLabelToggle(label, mediainfo, parent_name):
 	
 	Thread.AcquireLock(FAVOURITE_ITEMS_KEY)
 	
@@ -1670,12 +1664,8 @@ def FavouritesLabelToggle(label, mediainfo):
 	
 		if (label not in fav.labels):
 			fav.labels.append(label)
-			oc.header = "Label Added"
-			oc.message = "Label '" + label + "' added to '" + mediainfo.title + "'"
 		else:
 			fav.labels.remove(label)
-			oc.header = "Label Removed"
-			oc.message = "Label '" + label + "' removed from '" + mediainfo.title + "'"
 			
 		save_favourite_items(favs)
 		
@@ -1685,7 +1675,7 @@ def FavouritesLabelToggle(label, mediainfo):
 	finally:
 		Thread.ReleaseLock(FAVOURITE_ITEMS_KEY)
 		
-	return oc
+	return FavouritesLabelsItemMenu(mediainfo, parent_name, True)
 	
 ####################################################################################################
 
