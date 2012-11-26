@@ -29,6 +29,8 @@ FEATURED_ICON='icon-featured.png'
 GENRE_ICON='icon-genre.png'
 AZ_ICON='icon-az.png'
 
+ADDITIONAL_SOURCES = ['icefilms']
+
 def GetGenres():
 
 	return [

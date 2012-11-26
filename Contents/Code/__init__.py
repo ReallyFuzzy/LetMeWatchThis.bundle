@@ -58,6 +58,7 @@ TAG_ICON_COLOUR=['red','orange','yellow','green','cyan','blue','purple']
 BROWSED_ITEMS_KEY = "RECENT_BROWSED_ITEMS"
 WATCHED_ITEMS_KEY = "USER_VIEWING_HISTORY"
 FAVOURITE_ITEMS_KEY = "FAVOURITE_ITEMS"
+ADDITIONAL_SOURCES_KEY = "ADDITIONAL_SOURCES"
 
 USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_7_2) AppleWebKit/534.51.22 (KHTML, like Gecko) Version/5.1.1 Safari/534.51.22'
 	
@@ -100,7 +101,29 @@ def Start():
 	if hasattr(Site, 'Start'):
 		Site.Start()
 		
-	StartFavouritesCheck()
+	Thread.Create(StartFavouritesCheck)
+	Thread.Create(CheckAdditionalSources, sources=Site.ADDITIONAL_SOURCES)
+
+####################################################################################################
+def CheckAdditionalSources(sources):
+
+	"""
+	Check which of the additional sources this plugin knows about are
+	actually available on this machine.
+	"""
+
+	Dict[ADDITIONAL_SOURCES_KEY] = []
+	
+	for source in sources:
+		try:
+			request = urllib2.Request("http://localhost:32400/video/" + source + "/sources/isCompatible")
+			request.add_header('User-agent', USER_AGENT)
+			response = urllib2.urlopen(request).read()
+			Dict[ADDITIONAL_SOURCES_KEY].append(source)
+		except Exception, ex:
+			Log(str(ex))
+			pass
+
 	
 ####################################################################################################
 # see:
@@ -422,7 +445,7 @@ def ItemsMenu(
 	section_name="", start_page=0, path=[], parent_name=None
 ):
 
-	num_pages = 5
+	num_pages = 2
 	replace_parent = False
 	title2 = section_name
 	
@@ -829,7 +852,7 @@ def TVSeasonEpsActionWatch(item_name=None, items=None, action="watch"):
 ####################################################################################################
 # SOURCES MENUS
 ####################################################################################################
-def SourcesMenu(mediainfo=None, url=None, item_name=None, path=[], parent_name=None):
+def SourcesMenu(mediainfo=None, url=None, item_name=None, path=[], parent_name=None, external_caller=None):
 	
 	if (item_name is None):
 		item_name = mediainfo.title
@@ -860,17 +883,18 @@ def SourcesMenu(mediainfo=None, url=None, item_name=None, path=[], parent_name=N
 			
 		if mediainfo2.title is None:
 			mediainfo2.title = item_name
-		
-	oc.add(
-		PopupDirectoryObject(
-			key=Callback(SourcesActionMenu, mediainfo=mediainfo, path=path),
-			title=L("ItemSourceActionTitle"),
-			summary=mediainfo2.summary,
-			art=mediainfo2.background,
-			thumb= mediainfo2.poster,
-			duration=mediainfo2.duration,
+	
+	if (not external_caller):
+		oc.add(
+			PopupDirectoryObject(
+				key=Callback(SourcesActionMenu, mediainfo=mediainfo, path=path),
+				title=L("ItemSourceActionTitle"),
+				summary=mediainfo2.summary,
+				art=mediainfo2.background,
+				thumb= mediainfo2.poster,
+				duration=mediainfo2.duration,
+			)
 		)
-	)
 	
 	providerURLs = []
 	for source_item in Parsing.GetSources(url):
@@ -881,8 +905,16 @@ def SourcesMenu(mediainfo=None, url=None, item_name=None, path=[], parent_name=N
 			oc.add(mediaItem)
 			if (hasattr(mediaItem, 'url')):
 				providerURLs.append(mediaItem.url)
-					
-	if len(oc.objects) == 1:
+				
+	if (not external_caller and len(Dict[ADDITIONAL_SOURCES_KEY]) > 0):
+		oc.add(
+			DirectoryObject(
+				key=Callback(SourcesAdditionalMenu, mediainfo=mediainfo2),
+				title="Additional Sources...",
+			)
+		)
+		
+	if len(oc.objects) == 2:
 		oc.header = "No Enabled Sources Found"
 		oc.message = ""
 	else:
@@ -893,13 +925,27 @@ def SourcesMenu(mediainfo=None, url=None, item_name=None, path=[], parent_name=N
 		else:
 			browsedItems = BrowsedItems()
 		
-		browsedItems.add(mediainfo2, providerURLs, path)
+		browsedItems.add(mediainfo2, providerURLs, path, external_caller)
 		Data.Save(BROWSED_ITEMS_KEY, cerealizer.dumps(browsedItems))
 		
 		#Log("Browsed items: " + str(browsedItems))
 		
 	return oc
 
+	
+####################################################################################################
+def SourcesAdditionalMenu(mediainfo):
+
+	# FIXME: This assumes only 1 additional source is available.
+	if (len(Dict[ADDITIONAL_SOURCES_KEY]) > 0):
+		url = "http://localhost:32400/video/" + Dict[ADDITIONAL_SOURCES_KEY][0] + "/sources/" + mediainfo.id + "/" + mediainfo.title
+	
+	if (mediainfo.releasedate):
+		url += "/" + mediainfo.releasedate
+
+	return Redirect(url)
+
+	
 ####################################################################################################
 
 def SourcesActionMenu(mediainfo, path):
@@ -1015,10 +1061,11 @@ def SearchResultsMenu(query, type, parent_name=None):
 		func_name = SourcesMenu
 		
 	for item in Parsing.GetSearchResults(query=query, type=type):
+		title = item.title + " (" + item.releasedate + ")" if item.releasedate else item.title
 		oc.add(
 			DirectoryObject(
 				key=Callback(func_name, mediainfo=item, url=item.id, path=path, parent_name=oc.title2),
-				title=item.title,
+				title=title,
 				tagline="",
 				summary="",
 				thumb=item.poster,
@@ -1850,8 +1897,8 @@ def CheckForNewItemsInFavourite(favourite, force=False):
 			
 ####################################################################################################
 # Params:
-#   mediainfo: A MediaInfo item for the current LMWT item being viewed (either a movie or single episode).
-#   item:  A dictionary containing information for the selected source for the LMWT item being viewed.
+#   mediainfo: A MediaInfo item for the current item being viewed (either a movie or single episode).
+#   item:  A dictionary containing information for the selected source for the item being viewed.
 def GetItemForSource(mediainfo, source_item):
 	
 	media_item = Parsing.GetItemForSource(mediainfo, source_item)
@@ -1884,13 +1931,86 @@ def PlayVideoNotSupported(mediainfo):
 
 
 ####################################################################################################
+#
+@route(VIDEO_PREFIX + '/sources/isCompatible')
+def GetAdditionalSourcesIsCompatible():
 
+	""" 
+	Quick and dirty method external plugins can call to see if we're present or not on a user's
+	machine.
+	
+	If we're not deployed / present on the user's machine, then a 404 will be returned by the
+	PMS and the external plugin will know not to use us. If we are present, this will return
+	a 200 with no data, letting the external plugin know it can call us to get additional sources
+	for an item.
+	"""
+	return True
+
+
+####################################################################################################
+#
+@route(VIDEO_PREFIX + '/sources/{imdb_id}/{title}')
+@route(VIDEO_PREFIX + '/sources/{imdb_id}/{title}/{year}')
+@route(VIDEO_PREFIX + '/sources/{imdb_id}/{title}/{season_num}/{ep_num}')
+def GetAdditionalSources(imdb_id, title, year=None, season_num=None, ep_num=None):
+
+	"""
+	Publicly accessible way to retrieve a list of sources from the site we support
+	for the passed in title. As we may not be deployed on a user's machine, it's recommended
+	that whoevever is thinking of calling this, should first call 
+	GetAdditionalSourcesIsCompatible() above.
+	"""
+	
+	caller = None
+
+	# Keep track of who requested we generate these additional sources. This will be used
+	# to let the original plugin know when the user decides to play one of our sources.
+	if ('Referer' in Request.Headers):
+	
+		match = re.search("/video/([^/]+)/", Request.Headers['Referer'])
+		caller = match.group(1) if match else None
+		Log(caller)
+	
+	# Work out what type of search to carry out.
+	type = 'tv' if season_num else 'movies'
+	
+	# Search for the passed in information using the site specific parser linked to this.
+	search_results = Parsing.GetSearchResults(title, type)
+	Log(len(search_results))
+	
+	# Did we get any results?
+	if (len(search_results) > 0):
+	
+		# Sort results based on how close they are to the passed in title.
+		search_results = sorted(
+			search_results,
+			key=lambda x: String.LevenshteinDistance(x.title.lower(), title.lower())
+		)
+		
+		# If the closest title is pretty close to the passed in title, assume it's a match
+		# and generate our source menu for it and return that to the caller.
+		if (String.LevenshteinDistance(search_results[0].title.lower(), title.lower()) < 3):
+	
+			# FIXME: Need to check imdb_id.
+			oc =  SourcesMenu(search_results[0], search_results[0].id, external_caller=caller)
+			oc.title1 = oc.title2
+			oc.title2 = "Additional Sources (" + NAME + ")"
+			return oc
+
+	# No matches or close enough match if we get here....
+	return ObjectContainer(header="No Additional Sources Found", message="Couldn't match item name at other providers")
+	
+
+####################################################################################################
+#
 @route(VIDEO_PREFIX + '/mediainfo/{url}')
 def MediaInfoLookup(url):
 
-	""" Returns the media info stored in the recently browsed item list
+	"""
+	Returns the media info stored in the recently browsed item list
 	for the given provider URL or None if the item isn't found in the
-	recently browsed item list"""
+	recently browsed item list.
+	"""
 	
 	# Get clean copy of URL user has played.
 	decoded_url = String.Decode(str(url))
@@ -1900,7 +2020,7 @@ def MediaInfoLookup(url):
 	browsedItems =  cerealizer.loads(Data.Load(BROWSED_ITEMS_KEY))
 	
 	# See if the URL being played is on our recently browsed list.
-	info = browsedItems.get(decoded_url)
+	info = browsedItems.getByURL(decoded_url)
 
 	if (info is None):
 		Log("****** ERROR: Watching Item which hasn't been browsed to")
@@ -1909,23 +2029,60 @@ def MediaInfoLookup(url):
 	# Return the media info that was stored in the recently browsed item.
 	return demjson.encode(info[0])
 
+
 ####################################################################################################
+#
+@route(VIDEO_PREFIX + '/playback/caller/{url}')
+def PlaybackCaller(url):
 
-@route(VIDEO_PREFIX + '/playback/{url}')
-def PlaybackStarted(url):
+	"""
+	Return the name of the video plugin that was used to generate the source menu for the
+	passed in provider video URL. 
+	
+	This should be used internally by this plugin to construct the URL to call when playback
+	of one of its sources is started. This is needed for when the item being played wasn't 
+	accessed directly via this plugin but instead was accessed via the additional sources menu
+	of another plugin.
+	"""
+	
+	# Get clean copy of URL user has played.
+	decoded_url = String.Decode(str(url))
+	#Log(decoded_url)
+	
+	# See if the URL being played is on our recently browsed list.
+	caller =  cerealizer.loads(Data.Load(BROWSED_ITEMS_KEY)).getCaller(decoded_url)
+	if (not caller):
+		caller = VIDEO_PREFIX
+	
+	#Log(caller)
+	
+	return JSON.StringFromObject({'caller': caller})
+	
 
+####################################################################################################
+#
+@route(VIDEO_PREFIX + '/playback/{id}')
+@route(VIDEO_PREFIX + '/playback/{id}/{season_num}/{ep_num}')
+def PlaybackStarted(id, season_num=None, ep_num=None):
+
+	"""
+	Handle the fact that playback of a source has started.
+	
+	Note that the URL of the source isn't passed back as the source isn't guaranteed to be
+	one of this plugin's and could instead have come from an additional source for which we
+	don't know the URLs. So, instead, IDs which should match up between both systems are passed
+	back to this
+	"""
+	
 	# Nothing to do. User doesn't want any tracking.
 	if (Prefs['watched_indicator'] == 'Disabled' and Prefs['watched_amount'] == 'Disabled'):
 		return ""
-		
-	# Get clean copy of URL user has played.
-	decoded_url = String.Decode(str(url))
-
+	
 	# Get list of items user has recently looked at.
 	browsedItems =  cerealizer.loads(Data.Load(BROWSED_ITEMS_KEY))
 	
 	# See if the URL being played is on our recently browsed list.
-	info = browsedItems.get(decoded_url)
+	info = browsedItems.getByID(id, season_num, ep_num)
 	
 	if (info is None):
 		Log("****** ERROR: Watching Item which hasn't been browsed to")

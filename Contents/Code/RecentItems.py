@@ -8,14 +8,25 @@ class BrowsedItems(object):
 		self.items = []
 		pass
 		
-	def add(self, mediaInfo, providerURLs, path):
+	def add(self, mediaInfo, providerURLs, path, caller=None):
 	
-		self.items.append([mediaInfo, providerURLs, path])
+		self.items.append([mediaInfo, providerURLs, path, caller])
 		
 		while (len(self.items) > 50):
 			self.items.pop(0)
-		
-	def get(self, url):
+	
+	def getCaller(self, url):
+	
+		# Look through each of our items and see if any of them has a URL
+		# which matches the passed in URL.
+		result = [elem for elem in self.items if url in elem[1]]
+
+		if (len(result) > 0 and len(result[0]) >= 4):
+			return result[0][3]
+		else:
+			return None
+			
+	def getByURL(self, url):
 	
 		# Look through each of our items and see if any of them has a URL
 		# which matches the passed in URL.
@@ -23,6 +34,27 @@ class BrowsedItems(object):
 
 		if (len(result) > 0):
 			return [result[-1][0], result[-1][2]]
+		else:
+			return None
+			
+	def getByID(self, id, season_num, ep_num):
+	
+		# Look through each of our items and see if any of them has a URL
+		# which matches the passed in URL.
+		result = None
+		for item in self.items:
+			if (item[0].id == id):
+				if (season_num and ep_num):
+					if (item[0].season_num == season_num and item[0].ep_num):
+						result = item
+				else:
+					result = item
+					
+			if (result):
+				break
+		
+		if (result):
+			return [result[0], result[2]]
 		else:
 			return None
 
