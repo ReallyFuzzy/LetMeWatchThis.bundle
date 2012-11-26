@@ -937,14 +937,17 @@ def SourcesMenu(mediainfo=None, url=None, item_name=None, path=[], parent_name=N
 def SourcesAdditionalMenu(mediainfo):
 
 	# FIXME: This assumes only 1 additional source is available.
-	if (len(Dict[ADDITIONAL_SOURCES_KEY]) > 0):
-		url = "http://localhost:32400/video/" + Dict[ADDITIONAL_SOURCES_KEY][0] + "/sources/" + mediainfo.id + "/" + mediainfo.title
+
+	# See which additional sources are available.	
+	url = "http://localhost:32400/video/" + Site.ADDITIONAL_SOURCES[0] + "/sources/" + mediainfo.id
 	
-	if (mediainfo.releasedate):
-		url += "/" + mediainfo.releasedate
-
+	if (mediainfo.type == 'movies'):
+		url += "/" + mediainfo.title
+	else:
+		url += "/" + mediainfo.show_name + "/" + str(mediainfo.season) + "/" + str(mediainfo.ep_num)
+	
+	Log(url)
 	return Redirect(url)
-
 	
 ####################################################################################################
 
@@ -1975,7 +1978,7 @@ def GetAdditionalSources(imdb_id, title, year=None, season_num=None, ep_num=None
 	type = 'tv' if season_num else 'movies'
 	
 	# Search for the passed in information using the site specific parser linked to this.
-	search_results = Parsing.GetSearchResults(title, type)
+	search_results = Parsing.GetSearchResults(query=title, type=type, imdb_id=imdb_id)
 	Log(len(search_results))
 	
 	# Did we get any results?
@@ -1991,11 +1994,43 @@ def GetAdditionalSources(imdb_id, title, year=None, season_num=None, ep_num=None
 		# and generate our source menu for it and return that to the caller.
 		if (String.LevenshteinDistance(search_results[0].title.lower(), title.lower()) < 3):
 	
-			# FIXME: Need to check imdb_id.
-			oc =  SourcesMenu(search_results[0], search_results[0].id, external_caller=caller)
-			oc.title1 = oc.title2
-			oc.title2 = "Additional Sources (" + NAME + ")"
-			return oc
+			if (type == 'movies'):
+				# FIXME: Need to check imdb_id.
+				oc =  SourcesMenu(search_results[0], search_results[0].id, external_caller=caller)
+				oc.title1 = oc.title2
+				oc.title2 = "Additional Sources (" + NAME + ")"
+				return oc
+				
+			else:
+			
+				# Get a listing of seasons for this show.
+				seasons = Parsing.GetTVSeasons(search_results[0].id)
+				season = [season for season in seasons if 'season_number' in season and season['season_number'] == int(season_num)]
+				
+				if (len(season) == 1):
+				
+					# Get a listing of episodes for this shows's season.
+					eps = Parsing.GetTVSeasonEps(season[0]['season_url'])
+					ep = [ep for ep in eps if 'ep_num' in ep and ep['ep_num'] == int(ep_num)]
+					
+					if (len(ep) == 1):
+					
+						mediainfo = Parsing.GetMediaInfo(
+							search_results[0].id,
+							MediaInfo(
+								type='tv',
+								show_name=title,
+								season=season_num,
+								ep_num=ep_num
+							),
+							need_meta_retrieve(mediainfo.type)
+						)
+						
+						oc =  SourcesMenu(mediainfo, ep[0]['ep_url'], external_caller=caller)
+						oc.title1 = oc.title2
+						oc.title2 = "Additional Sources (" + NAME + ")"
+						return oc
+
 
 	# No matches or close enough match if we get here....
 	return ObjectContainer(header="No Additional Sources Found", message="Couldn't match item name at other providers")
@@ -2016,11 +2051,8 @@ def MediaInfoLookup(url):
 	decoded_url = String.Decode(str(url))
 	#Log(decoded_url)
 	
-	# Get list of items user has recently looked at.
-	browsedItems =  cerealizer.loads(Data.Load(BROWSED_ITEMS_KEY))
-	
 	# See if the URL being played is on our recently browsed list.
-	info = browsedItems.getByURL(decoded_url)
+	info = cerealizer.loads(Data.Load(BROWSED_ITEMS_KEY)).getByURL(decoded_url)
 
 	if (info is None):
 		Log("****** ERROR: Watching Item which hasn't been browsed to")
@@ -2073,6 +2105,9 @@ def PlaybackStarted(id, season_num=None, ep_num=None):
 	don't know the URLs. So, instead, IDs which should match up between both systems are passed
 	back to this
 	"""
+	
+	season_num = int(season_num) if season_num else None
+	ep_num = int(ep_num) if ep_num else None
 	
 	# Nothing to do. User doesn't want any tracking.
 	if (Prefs['watched_indicator'] == 'Disabled' and Prefs['watched_amount'] == 'Disabled'):
