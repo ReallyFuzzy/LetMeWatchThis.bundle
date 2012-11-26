@@ -342,7 +342,7 @@ def GetSearchResults(query=None,type=None,):
 	if (type == "tv"):
 		section = "2"
 	
-	url = LMWT_SEARCH_URL + "?search_section=" + section + "&search_keywords=" + urllib.quote_plus(query) + "&key=" + key
+	url = LMWT_SEARCH_URL + "?search_section=" + section + "&search_keywords=" + urllib.quote_plus(query) + "&key=" + key + "&sort=views"
 	soup = BeautifulSoup(HTTP.Request(url,cacheTime=0).content)
 	#Log(soup)
 	
@@ -354,8 +354,12 @@ def GetSearchResults(query=None,type=None,):
 		res.type = type
 		
 		# Extract out title
-		title_alt = item.find('a')['title']
-		res.title = re.search("Watch (.*)", title_alt).group(1)
+		res.title = re.search("Watch (.*)", item.find('a')['title']).group(1).strip()
+		match = re.search("(.*)\((\d*)\)", res.title)
+		
+		if (match):
+			res.title = match.group(1).strip()
+			res.releasedate = match.group(2).strip()
 		
 		# Extract out URL
 		res.id = item.a['href'][1:]
@@ -380,20 +384,20 @@ def GetSearchResults(query=None,type=None,):
 #   item:  A dictionary containing information for the selected source for the LMWT item being viewed.
 def GetItemForSource(mediainfo, source_item):
 	
-	# See if provider is supported.
-	providerURL = URLService.NormalizeURL(LMWT_URL + source_item['url'])
-	providerSupported = URLService.ServiceIdentifierForURL(providerURL) is not None
+	providerInfoURL = "http://providerinfo." + source_item['provider_name'].lower() + "/?plugin=lmwt"
+	providerSupported = URLService.ServiceIdentifierForURL(providerInfoURL) is not None
 	
 	if (providerSupported):
 	
-		# See if we need to hide provider....
-		providerInfoURL = "http://providerinfo." + source_item['provider_name'] + "/?plugin=lmwt"
+		# See if we need to hide provider by asking the URL service to normalise it's special
+		# providerinfo URL. This should return a URL where the query string is made up of
+		# all the options that URL Service supports in this plugin's little world. 
 		providerVisible =  'visible=true' in URLService.NormalizeURL(providerInfoURL)
 		
 		if (providerVisible):
-		
+	
 			return VideoClipObject(
-				url=providerURL,
+				url=LMWT_URL + source_item['url'],
 				title=source_item['name'] + " - " + source_item['provider_name'],
 				summary=mediainfo.summary,
 				art=mediainfo.background,
