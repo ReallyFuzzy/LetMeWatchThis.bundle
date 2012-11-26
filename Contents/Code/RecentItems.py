@@ -45,7 +45,7 @@ class BrowsedItems(object):
 		for item in self.items:
 			if (item[0].id == id):
 				if (season_num and ep_num):
-					if (item[0].season_num == season_num and item[0].ep_num):
+					if (item[0].season == season_num and item[0].ep_num == ep_num):
 						result = item
 				else:
 					result = item
