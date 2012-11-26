@@ -14,7 +14,7 @@ class BrowsedItems(object):
 		
 		while (len(self.items) > 50):
 			self.items.pop(0)
-	
+		
 	def getCaller(self, url):
 	
 		# Look through each of our items and see if any of them has a URL
@@ -52,7 +52,7 @@ class BrowsedItems(object):
 					
 			if (result):
 				break
-		
+				
 		if (result):
 			return [result[0], result[2]]
 		else:

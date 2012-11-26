@@ -94,37 +94,16 @@ def Start():
 	HTTP.Headers['Accept'] = 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
 	HTTP.Headers['Accept-Encoding'] = '*gzip, deflate'
 	HTTP.Headers['Connection'] = 'keep-alive'
-	
-	if (Prefs['versiontracking'] == True):
-		Thread.Create(VersionTrack)
-	
+
 	if hasattr(Site, 'Start'):
 		Site.Start()
 		
+	if (Prefs['versiontracking'] == True):
+		Thread.Create(VersionTrack)
+	
 	Thread.Create(StartFavouritesCheck)
 	Thread.Create(CheckAdditionalSources, sources=Site.ADDITIONAL_SOURCES)
 
-####################################################################################################
-def CheckAdditionalSources(sources):
-
-	"""
-	Check which of the additional sources this plugin knows about are
-	actually available on this machine.
-	"""
-
-	Dict[ADDITIONAL_SOURCES_KEY] = []
-	
-	for source in sources:
-		try:
-			request = urllib2.Request("http://localhost:32400/video/" + source + "/sources/isCompatible")
-			request.add_header('User-agent', USER_AGENT)
-			response = urllib2.urlopen(request).read()
-			Dict[ADDITIONAL_SOURCES_KEY].append(source)
-		except Exception, ex:
-			Log(str(ex))
-			pass
-
-	
 ####################################################################################################
 # see:
 #  http://dev.plexapp.com/docs/Functions.html#ValidatePrefs
@@ -946,7 +925,7 @@ def SourcesAdditionalMenu(mediainfo):
 	else:
 		url += "/" + mediainfo.show_name + "/" + str(mediainfo.season) + "/" + str(mediainfo.ep_num)
 	
-	Log(url)
+	#Log(url)
 	return Redirect(url)
 	
 ####################################################################################################
@@ -2181,6 +2160,27 @@ def VersionTrack():
 	except:
 		pass
 
+####################################################################################################
+def CheckAdditionalSources(sources):
+
+	"""
+	Check which of the additional sources this plugin knows about are
+	actually available on this machine.
+	"""
+
+	Dict[ADDITIONAL_SOURCES_KEY] = []
+	
+	for source in sources:
+		try:
+			request = urllib2.Request("http://localhost:32400/video/" + source + "/sources/isCompatible")
+			request.add_header('User-agent', USER_AGENT)
+			response = urllib2.urlopen(request).read()
+			Dict[ADDITIONAL_SOURCES_KEY].append(source)
+		except Exception, ex:
+			Log(str(ex))
+			pass
+
+	
 ###############################################################################
 # UTIL METHODS
 ###############################################################################

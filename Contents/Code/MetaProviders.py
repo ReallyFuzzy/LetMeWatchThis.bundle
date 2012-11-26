@@ -130,7 +130,7 @@ class TVDBProvider(object):
 				show = t[kwargs['imdb_id']]
 			except tvdb_shownotfound, ex:
 				if ('show_name' in kwargs):
-					Log(kwargs['show_name'])
+					#Log(kwargs['show_name'])
 					show = t[kwargs['show_name']]
 					if (show['seriesname'].lower() != kwargs['show_name'].lower()):
 						raise ex
@@ -160,7 +160,7 @@ class TVDBProvider(object):
 					#Log("Found Season Poster:" + str(seasons))
 					mediaInfo.season_posters = seasons		
 				except Exception,ex:
-					Log(ex)
+					Log.Exception(ex)
 					
 			else:
 			
@@ -179,7 +179,7 @@ class TVDBProvider(object):
 					if (len(season_posters) > 0):
 						mediaInfo.poster = sorted(season_posters, key=lambda x: x['rating'] if 'rating' in x else '0')[-1]['_bannerpath']
 				except Exception, ex:
-					Log(ex)
+					Log.Exception(ex)
 				
 				if ('ep_num' not in kwargs or kwargs['ep_num'] is None):
 					episodes = {}
