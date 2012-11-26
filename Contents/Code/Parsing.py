@@ -109,12 +109,13 @@ def GetMediaInfo(url, mediainfo, query_external=False):
 					setattr(mediainfo, mi_item[0],  mi_item[1](info[lmwt_item]))
 						
 			except Exception, ex:
-				#Log(str(ex))
+				#Log.Exception("Error whilst reading in info from LMWT Page. Field " + lmwt_item)
 				pass
 				
 		return mediainfo
 
 	except Exception, ex:
+		#Log.Exception("Error whilst retrieving mediainfo.")
 		return None
 
 ####################################################################################################
@@ -331,49 +332,61 @@ def GetURL(type, genre = None, sort = None, page_num = None, alpha = None):
 	
 ####################################################################################################
 
-def GetSearchResults(query=None,type=None,):
+def GetSearchResults(query=None,type=None,imdb_id=None):
 	
 	items = []
 	
-	soup = BeautifulSoup(HTTP.Request(LMWT_SEARCH_URL + "?search",cacheTime=0).content)
-	key = soup.find('input', { 'type': 'hidden', 'name': 'key' })['value']
 	
-	section = "1"
-	if (type == "tv"):
-		section = "2"
+	if (imdb_id):
 	
-	url = LMWT_SEARCH_URL + "?search_section=" + section + "&search_keywords=" + urllib.quote_plus(query) + "&key=" + key + "&sort=views"
-	soup = BeautifulSoup(HTTP.Request(url,cacheTime=0).content)
-	#Log(soup)
-	
-	for item in soup.findAll("div", { 'class': 'index_item index_item_ie' }):
-	
-		#Log('Found item: ' + str(item))
 		res = MediaInfo()
-		
 		res.type = type
+		res.id = "/item.php?imdb=" + imdb_id
+		res.title = query
 		
-		# Extract out title
-		res.title = re.search("Watch (.*)", item.find('a')['title']).group(1).strip()
-		match = re.search("(.*)\((\d*)\)", res.title)
-		
-		if (match):
-			res.title = match.group(1).strip()
-			res.releasedate = match.group(2).strip()
-		
-		# Extract out URL
-		res.id = item.a['href'][1:]
-		
-		# Extract out thumb
-		res.poster = item.find('img')['src']
-		
-		# Extract out rating
-		rating_style = item.find('li')['style']
-		res.rating = re.search("width:\s(\d)*px;", rating_style).group(1);
-		
-		# Add to item list.
-		#Log("Adding item: " + str(res))
 		items.append(res)
+		
+	else:
+	
+		soup = BeautifulSoup(HTTP.Request(LMWT_SEARCH_URL + "?search",cacheTime=0).content)
+		key = soup.find('input', { 'type': 'hidden', 'name': 'key' })['value']
+		
+		section = "1"
+		if (type == "tv"):
+			section = "2"
+		
+		url = LMWT_SEARCH_URL + "?search_section=" + section + "&search_keywords=" + urllib.quote_plus(query) + "&key=" + key + "&sort=views"
+		soup = BeautifulSoup(HTTP.Request(url,cacheTime=0).content)
+		#Log(soup)
+		
+		for item in soup.findAll("div", { 'class': 'index_item index_item_ie' }):
+		
+			#Log('Found item: ' + str(item))
+			res = MediaInfo()
+			
+			res.type = type
+			
+			# Extract out title
+			res.title = re.search("Watch (.*)", item.find('a')['title']).group(1).strip()
+			match = re.search("(.*)\((\d*)\)", res.title)
+			
+			if (match):
+				res.title = match.group(1).strip()
+				res.releasedate = match.group(2).strip()
+			
+			# Extract out URL
+			res.id = item.a['href'][1:]
+			
+			# Extract out thumb
+			res.poster = item.find('img')['src']
+			
+			# Extract out rating
+			rating_style = item.find('li')['style']
+			res.rating = re.search("width:\s(\d)*px;", rating_style).group(1);
+			
+			# Add to item list.
+			#Log("Adding item: " + str(res))
+			items.append(res)
 	
 	#Log(items)
 	return items
