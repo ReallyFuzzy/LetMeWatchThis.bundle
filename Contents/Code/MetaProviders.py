@@ -64,14 +64,14 @@ class MovieDBProvider(object):
 					
 				xpRes = movie.xpath("./name/text()")
 				if (len(xpRes) > 0):
-					mediaInfo.title = str(xpRes[0])
+					mediaInfo.title = xpRes[0]
 					
 				mediaInfo.background = self.MovieDBGetImage(movie, "backdrop", ["w1280", "poster", "original"],False)
 				mediaInfo.poster = self.MovieDBGetImage(movie, "backdrop", ["w342", "original"],True)
 				
 				xpRes = movie.xpath("./overview/text()")
 				if (len(xpRes) > 0):
-					mediaInfo.summary = str(xpRes[0])
+					mediaInfo.summary = xpRes[0]
 					
 				xpRes = movie.xpath("./rating/text()")
 				
@@ -205,13 +205,14 @@ class TVDBProvider(object):
 					mediaInfo.summary = episode['overview']
 					if episode['firstaired']:
 						mediaInfo.releasedate = Datetime.ParseDate(episode['firstaired'])
-					mediaInfo.rating = float(episode['rating'])
+					mediaInfo.rating = float(episode['rating']) if (episode['rating']) else None
 					mediaInfo.season = int(episode['seasonnumber'])
 					mediaInfo.ep_num = int(episode['episodenumber'])
 					mediaInfo.season_poster = mediaInfo.poster
 					mediaInfo.poster = episode['filename']
 
 		except Exception, ex:
+			#Log.Exception("Error whilst retrieving meta data for TV Show")
 			pass
 
 		return mediaInfo
