@@ -372,7 +372,7 @@ def GetSearchResults(query=None,type=None,imdb_id=None):
 			
 			if (match):
 				res.title = match.group(1).strip()
-				res.releasedate = match.group(2).strip()
+				res.year = int(match.group(2).strip())
 			
 			# Extract out URL
 			res.id = item.a['href'][1:]
