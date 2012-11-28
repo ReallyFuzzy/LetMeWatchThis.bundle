@@ -1081,16 +1081,19 @@ def SourcesActionTrailerMenu(mediainfo, path):
 			"Couldn't find any trailers for this movie.\nMovie Name: " + mediainfo.title
 		)
 	else:
+	
+		# Resort objects so that trailers appear first in the list.
 		objects = sorted(
 			objects, 
-			key=lambda x: "--" + x.title if "(trailer" in  x.title.lower() else x.title
+			key=lambda x: "AA" + x.title.replace(" ","") if x.title.lower().find("(trailer") != -1 else x.title
 		)
 			
 		return ObjectContainer(
 			no_cache=True,
 			title1=mediainfo.title,
 			title2="Trailers",
-			objects = objects
+			objects = objects,
+			art=mediainfo.background,
 		)
 		
 	return oc
