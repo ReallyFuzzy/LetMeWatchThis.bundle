@@ -280,9 +280,12 @@ def GetItems(type, genre = None, sort = None, alpha = None, pages = 5, start_pag
 			res.type = type
 
 			# Extract out title
-			title_alt = item.find('a')['title']
-			res.title = re.search("Watch (.*)", title_alt).group(1)
+			res.title = re.search("Watch (.*)", item.find('a')['title']).group(1).strip()
+			match = re.search("(.*)\((\d*)\)", res.title)
 			
+			if (match):
+				res.title = match.group(1).strip()
+				res.year = int(match.group(2).strip())
 			
 			# Extract out URL
 			res.id = item.a['href'][1:]

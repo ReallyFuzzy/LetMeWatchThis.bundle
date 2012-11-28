@@ -522,6 +522,10 @@ def ItemsMenu(
 			else:
 				indicator =  u"\u00F8" + "  "
 		
+		title = item.title
+		if (item.year):
+			title = title + " (" + str(item.year) + ")"
+			
 		oc.add(
 			DirectoryObject(
 				key=Callback(
@@ -531,10 +535,10 @@ def ItemsMenu(
 					path=path,
 					parent_name=oc.title2,
 				),
-				title=indicator + item.title,
+				title=indicator + title,
 				tagline="",
 				summary="",
-				thumb= item.poster,
+				thumb=item.poster,
 				art="",
 			)
 		)
@@ -578,8 +582,12 @@ def TVSeasonMenu(mediainfo=None, url=None, item_name=None, path=[], parent_name=
 		
 	if (mediainfo.show_name is None and mediainfo.title is not None):
 		mediainfo.show_name = mediainfo.title
-								
-	oc = ObjectContainer(view_group = "InfoList", title1=parent_name, title2=mediainfo.show_name)
+	
+	title = mediainfo.show_name
+	if (mediainfo.year):
+		title = title + " (" + str(mediainfo.year) + ")"
+		
+	oc = ObjectContainer(view_group = "InfoList", title1=parent_name, title2=title)
 	
 	path = path + [{'elem':mediainfo.show_name, 'show_url':url}]
 	
@@ -886,6 +894,8 @@ def SourcesMenu(mediainfo=None, url=None, item_name=None, path=[], parent_name=N
 	
 	if (item_name is None):
 		item_name = mediainfo.title
+		if (mediainfo.year):
+			item_name = item_name + " (" + str(mediainfo.year) + ") "
 	
 	path = path + [ { 'elem': item_name, 'url': url } ]
 	
@@ -917,7 +927,7 @@ def SourcesMenu(mediainfo=None, url=None, item_name=None, path=[], parent_name=N
 	if (not external_caller):
 		oc.add(
 			PopupDirectoryObject(
-				key=Callback(SourcesActionMenu, mediainfo=mediainfo, path=path),
+				key=Callback(SourcesActionMenu, mediainfo=mediainfo2, path=path),
 				title=L("ItemSourceActionTitle"),
 				summary=mediainfo2.summary,
 				art=mediainfo2.background,
@@ -944,7 +954,7 @@ def SourcesMenu(mediainfo=None, url=None, item_name=None, path=[], parent_name=N
 			)
 		)
 		
-	if len(oc.objects) == 2:
+	if len(providerURLs) == 0:
 		oc.header = "No Enabled Sources Found"
 		oc.message = ""
 	else:
@@ -984,13 +994,22 @@ def SourcesAdditionalMenu(mediainfo):
 	request.add_header('Referer', "http://localhost:32400" + VIDEO_PREFIX + "/")
 	return urllib2.urlopen(request).read()
 
-	
+
 ####################################################################################################
 
 def SourcesActionMenu(mediainfo, path):
 
 	oc = ObjectContainer(view_group="InfoList", title1="", title2="")
 	
+	if (mediainfo.type == "movies"):
+	
+		oc.add(
+			DirectoryObject(
+				key=Callback(SourcesActionTrailerMenu, mediainfo=mediainfo, path=path),
+				title="View Trailer",
+			)
+	)
+
 	if (
 		Prefs['watched_indicator'] == 'All' 
 		or ( mediainfo.type == 'tv' and Prefs['watched_indicator'] != 'Disabled')
@@ -1031,6 +1050,52 @@ def SourcesActionMenu(mediainfo, path):
 		
 	return oc
 
+####################################################################################################
+
+def SourcesActionTrailerMenu(mediainfo, path):
+
+	try:
+		result = SearchService.Query(urllib.quote(mediainfo.title), "com.plexapp.plugins.amt", None)
+	except KeyError, ex:
+		return MessageContainer(
+			"'Apple Movie Trailers' plugin not found.",
+			"Please install the 'Apple Movie Trailers' plugin from the Channel Directory to view trailers."
+		)
+		
+	objects = []
+	for object in result.objects:
+		
+		title = object.title
+		match = re.match("(.*) \(.*\)",title)
+		
+		if match:
+			title = match.group(1)
+		
+		if (String.LevenshteinDistance(mediainfo.title.lower(), title.lower()) <= 3):
+			objects.append(object)
+			
+	
+	if (len(objects) == 0):
+		return MessageContainer(
+			"No Trailers Found",
+			"Couldn't find any trailers for this movie.\nMovie Name: " + mediainfo.title
+		)
+	else:
+		objects = sorted(
+			objects, 
+			key=lambda x: "--" + x.title if "(trailer" in  x.title.lower() else x.title
+		)
+			
+		return ObjectContainer(
+			no_cache=True,
+			title1=mediainfo.title,
+			title2="Trailers",
+			objects = objects
+		)
+		
+	return oc
+	
+	
 ####################################################################################################
 
 def SourcesActionWatch(item_name=None, items=None, action="watch"):
