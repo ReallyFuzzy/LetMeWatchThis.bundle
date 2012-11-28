@@ -111,7 +111,9 @@ def Start():
 def ValidatePrefs():
 
 	if (Prefs['favourite_notify_email']):
-		Utils.add_favourites_cron(Platform.OS, NAME, VIDEO_PREFIX)				
+		# Enable cron if we have favourites already being checked.
+		if (len([x for x in load_favourite_items().get() if x.new_item_check]) > 0):
+			Utils.add_favourites_cron(Platform.OS, NAME, VIDEO_PREFIX)				
 	else:
 		Utils.del_favourites_cron(Platform.OS, NAME, VIDEO_PREFIX)
 
@@ -1766,12 +1768,15 @@ def FavouritesRemoveItemMenu(mediainfo):
 def FavouritesNotifyMenu(mediainfo=None):
 
 	oc = ObjectContainer(title1="", title2="")
+	oc.header = "New Item Notification"
 	
-	# Load up favourites and get reference to stored favourite rather than
-	# dissociated favourite that's been passed in.
+	cron_op = None
 	
 	Thread.AcquireLock(FAVOURITE_ITEMS_KEY)
+	
 	try:
+		# Load up favourites and get reference to stored favourite rather than
+		# dissociated favourite that's been passed in.
 		favs = load_favourite_items()
 		fav = favs.get(mediainfo=mediainfo)[0]
 		
@@ -1785,6 +1790,13 @@ def FavouritesNotifyMenu(mediainfo=None):
 			fav.items = None
 			fav.date_last_item_check = None
 			oc.message = "Plugin will no longer check for new items."
+			
+			# If no other favourites are getting checked, remove cron.
+			if (
+				Prefs['favourite_notify_email'] and
+				len([x for x in favs.get() if x.new_item_check]) == 0
+			):
+				cron_op = 'del'
 		
 		else:
 		
@@ -1801,13 +1813,27 @@ def FavouritesNotifyMenu(mediainfo=None):
 			fav.date_last_item_check = datetime.utcnow()
 			oc.message = "Plugin will check for new items and notify you when one is available.\nNote that this may slow down the plugin at startup."
 			
+			# If we're the first favourite and user has chosen email notifications,
+			# add cron / scheduled task.
+			if (
+				Prefs['favourite_notify_email'] and
+				len([x for x in favs.get() if x.new_item_check]) == 1
+			):
+				cron_op = 'add'
+			
 		save_favourite_items(favs)
 		
 	finally:
 		Thread.ReleaseLock(FAVOURITE_ITEMS_KEY)
 		
-	oc.header = "New Item Notification"
-	
+	# Do this here to 
+	# a) minimise risk of someting going wrong in favs manipulation and
+	# b) minimise lock length.
+	if (cron_op == 'add'):
+		Utils.add_favourites_cron(Platform.OS, NAME, VIDEO_PREFIX)
+	elif (cron_op == 'del'):
+		Utils.del_favourites_cron(Platform.OS, NAME, VIDEO_PREFIX)
+		
 	return oc
 	
 	
