@@ -1,0 +1,1 @@
+import sysimport osfrom datetime       import datetime		def FileLog(fn_name, msg):	message = str(datetime.now()) + " - [" + str(fn_name) + "]: " + msg + "\n"		f = None	try:		f = open(sys.path[0] + os.sep + "PLEX_LMWT_Favs.log", 'a')		f.write(message)	finally:		if (f):			f.close()	
