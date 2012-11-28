@@ -25,6 +25,8 @@ from MetaProviders  import DBProvider, MediaInfo
 from RecentItems    import BrowsedItems, ViewedItems
 from Favourites     import FavouriteItems
 
+import FileLog
+
 cerealizer.register(MediaInfo)
 
 VIDEO_PREFIX = Site.VIDEO_PREFIX
@@ -1839,7 +1841,7 @@ def FavouritesNotifyMenu(mediainfo=None):
 			url = [v for k,v in fav.path[-1].items() if (k == 'show_url' or k == 'season_url')][0]
 			
 			# Get URLs of all the shows for the current favourite.
-			fav.items = [show['ep_url'] for show in Parsing.GetTVSeasonEps(url)]
+			fav.items = [show['ep_url'] for show in Parsing.GetTVSeasonEps(url)][:-1]
 			
 			fav.date_last_item_check = datetime.utcnow()
 			oc.message = "Plugin will check for new items and notify you when one is available.\nNote that this may slow down the plugin at startup."
@@ -1879,6 +1881,8 @@ def NoOpMenu():
 @route(VIDEO_PREFIX + '/favourites/check')
 def StartFavouritesCheck():
 
+	FileLog.FileLog("","")
+	FileLog.FileLog("StartFavouritesCheck","")
 	CheckForNewItemsInFavourites()
 	return ""
 
@@ -1900,6 +1904,9 @@ def CheckForNewItemsInFavourite(favourite, force=False):
 	#Log("Processing favourite: " + str(favourite.mediainfo))
 	#Log("Favourite Last Checktime: " + str(favourite.date_last_item_check))
 	
+	FileLog.FileLog("CheckForNewItemsInFavourite","Processing favourite: " + str(favourite.mediainfo))
+	FileLog.FileLog("CheckForNewItemsInFavourite","Favourite Last Checktime: " + str(favourite.date_last_item_check))
+	
 	# Do we want to check this favourite for updates?
 	# If so, only bother if it's not already marked as having updates.
 	# and hasn't been checked in the last 12 hours.
@@ -1907,12 +1914,13 @@ def CheckForNewItemsInFavourite(favourite, force=False):
 		force or
 		(
 			favourite.new_item_check and
-			not favourite.new_item and
-			(datetime.utcnow() - favourite.date_last_item_check) > timedelta(hours=12)
+			not favourite.new_item 
+			#and (datetime.utcnow() - favourite.date_last_item_check) > timedelta(hours=12)
 		)
 	):
 	
 		#Log("Checking for new item in favourite")
+		FileLog.FileLog("CheckForNewItemsInFavourite","Checking for new item in favourite")
 		
 		# Get page URL
 		url = [v for k,v in favourite.path[-1].items() if (k == 'show_url' or k == 'season_url')][0]
@@ -1928,7 +1936,8 @@ def CheckForNewItemsInFavourite(favourite, force=False):
 		items_set = set(items)
 		new_items = items_set.difference(set(favourite.items))
 		#Log("Found new items: " + str(new_items))
-			
+		FileLog.FileLog("CheckForNewItemsInFavourite", "Found new items: " + str(new_items))
+		
 		# Items list is different.
 		# Because we may be taking a while to do this
 		# processing (we're relying on making a whole lot of HTTP requests to get
@@ -1956,6 +1965,7 @@ def CheckForNewItemsInFavourite(favourite, force=False):
 		try:
 			if (len(new_items) > 0 and Prefs['favourite_notify_email'] and not force):
 				Log('Notifying about new item for title: ' + favourite.mediainfo.title)
+				FileLog.FileLog("CheckForNewItemsInFavourite", 'Notifying about new item for title: ' + favourite.mediainfo.title)
 				Notifier.notify(
 					Prefs['favourite_notify_email'],
 					str(NAME),
@@ -1965,6 +1975,8 @@ def CheckForNewItemsInFavourite(favourite, force=False):
 		except Exception, ex:
 			Log("ERROR Whilst sending email notification about " + favourite.mediainfo.title)
 			Log(str(ex))
+			FileLog.FileLog("CheckForNewItemsInFavourite","ERROR Whilst sending email notification about " + favourite.mediainfo.title)
+			FileLog.FileLog("CheckForNewItemsInFavourite",str(ex))
 			pass
 			
 			
