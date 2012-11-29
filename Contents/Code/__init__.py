@@ -107,8 +107,8 @@ def Start():
 		Dict[LAST_USAGE_TIME_KEY] = datetime(1900,1,1)
 	
 	# Do a bit of housekeeping... See if any plugins that support our additional
-	# sources functionality are present on this sytem, start a new item check in
-	# favourites and log version usage.
+	# sources functionality are present on this sytem and start a new item check in
+	# favourites.
 	Thread.Create(StartFavouritesCheck)
 	Thread.Create(CheckAdditionalSources, sources=Site.ADDITIONAL_SOURCES)
 
@@ -1950,7 +1950,24 @@ def NoOpMenu():
 @route(VIDEO_PREFIX + '/favourites/check')
 def StartFavouritesCheck():
 
-	CheckForNewItemsInFavourites()
+	# Only launch a singe instance of this.
+	#
+	# This is important as when this get called via cron it's possible that the plugin
+	# will need to be started. If that happens then a call to this will be launched on a 
+	# a separate thread from the plugin's start method. This will then get processed at the
+	# same time as the cron's call on the main thread leading to potentially doubled up emails.
+	lock = Thread.Lock("FAVS_CHECK" + VIDEO_PREFIX)
+	
+	if (lock.acquire(False)):
+		try:
+			Log("Checking for favorites.")
+			CheckForNewItemsInFavourites()
+		finally:
+			lock.release()
+	else:
+		Log("Not checking for favourites as someone else already is.")
+	
+	Log("Done")
 	return ""
 
 
