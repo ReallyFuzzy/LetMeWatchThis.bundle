@@ -600,12 +600,17 @@ def TVSeasonMenu(mediainfo=None, url=None, item_name=None, path=[], parent_name=
 	mediainfo_meta = Parsing.GetMediaInfo(url, mediainfo, need_meta_retrieve(mediainfo.type))
 
 	# Did we manage to retrieve any meaningful info?
-	if (mediainfo_meta and mediainfo_meta.id):
-		mediainfo.id = mediainfo_meta.id if mediainfo_meta.id else mediainfo.id
-		mediainfo.background = mediainfo_meta.background
-		mediainfo.summary = mediainfo_meta.summary
-		mediainfo.show_name = mediainfo_meta.show_name
-		mediainfo.poster = mediainfo_meta.poster
+	if (mediainfo_meta):
+		if mediainfo_meta.id:
+			mediainfo.id = mediainfo_meta.id
+		if mediainfo_meta.summary:
+			mediainfo.summary = mediainfo_meta.summary
+		if mediainfo_meta.show_name:
+			mediainfo.show_name = mediainfo_meta.show_name
+		if mediainfo_meta.background:
+			mediainfo.background = mediainfo_meta.background
+		if mediainfo_meta.poster:
+			mediainfo.poster = mediainfo_meta.poster
 	
 	# When the passed in from favourites or Recently Watched, the mediainfo is for
 	# the episode actually watched. So, the poster will be for the ep, not the show.
@@ -1568,7 +1573,7 @@ def FavouritesMenu(parent_name=None,label=None, new_items_only=None, replace_par
 	# For each favourite item....
 	for item in favs.get(sort=sort_order):
 	
-		Log(item.mediainfo.title)
+		#Log(item.mediainfo.title)
 		
 		# If a label has been given, see if the item has the current label. 
 		if (label and label not in item.labels):
@@ -2136,14 +2141,12 @@ def GetAdditionalSources(imdb_id, title, year=None, season_num=None, ep_num=None
 	
 		match = re.search("/video/([^/]+)/", Request.Headers['Referer'])
 		caller = match.group(1) if match else None
-		Log(caller)
 	
 	# Work out what type of search to carry out.
 	type = 'tv' if season_num else 'movies'
 	
 	# Search for the passed in information using the site specific parser linked to this.
 	search_results = Parsing.GetSearchResults(query=title, type=type, imdb_id=imdb_id)
-	Log(len(search_results))
 	
 	# Did we get any results?
 	if (len(search_results) > 0):
@@ -2278,9 +2281,7 @@ def PlaybackStarted(url):
 			url = PLEX_URL + '/video/%s/playback/external/%s' % (caller, mediainfo['id'])
 			if (mediainfo['ep_num']):
 				url += "/%s/%s" % (str(mediainfo['season']), str(mediainfo['ep_num']))
-
-			Log(url)
-		
+			
 			request = urllib2.Request(url)
 			response = urllib2.urlopen(request)
 		
