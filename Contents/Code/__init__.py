@@ -594,23 +594,25 @@ def TVSeasonMenu(mediainfo=None, url=None, item_name=None, path=[], parent_name=
 	
 	path = path + [{'elem':mediainfo.show_name, 'show_url':url}]
 	
-	# Retrieve the imdb id out as this is what favourites are keyed on and this is the
-	# first level where an item can be added to favourites.
+	# Try to retrieve the imdb id and use that as our ID. As this is what favourites are keyed on
+	# and this is the first level where an item can be added to favourites it's important to make
+	# sure we have the same ID as will be used when navigating lower levels.
 	mediainfo_meta = Parsing.GetMediaInfo(url, mediainfo, need_meta_retrieve(mediainfo.type))
-	
-	mediainfo.id = mediainfo_meta.id
-	mediainfo.background = mediainfo_meta.background
-	mediainfo.summary = mediainfo_meta.summary
-	mediainfo.show_name = mediainfo_meta.show_name
+
+	# Did we manage to retrieve any meaningful info?
+	if (mediainfo_meta and mediainfo_meta.id):
+		mediainfo.id = mediainfo_meta.id if mediainfo_meta.id else mediainfo.id
+		mediainfo.background = mediainfo_meta.background
+		mediainfo.summary = mediainfo_meta.summary
+		mediainfo.show_name = mediainfo_meta.show_name
+		mediainfo.poster = mediainfo_meta.poster
 	
 	# When the passed in from favourites or Recently Watched, the mediainfo is for
 	# the episode actually watched. So, the poster will be for the ep, not the show.
 	# However, show info may have previously been retrieved. So use that if available.
 	if hasattr(mediainfo,'show_poster'):
 		mediainfo.poster = mediainfo.show_poster
-	else:
-		mediainfo.poster = mediainfo_meta.poster
-			
+
 	oc.add(
 		PopupDirectoryObject(
 			key=Callback(TVSeasonActionMenu, mediainfo=mediainfo, path=path),
@@ -633,7 +635,11 @@ def TVSeasonMenu(mediainfo=None, url=None, item_name=None, path=[], parent_name=
 		mediainfo_season.season = season
 		
 		# Does the meta provider have a poster for this season?
-		if (hasattr(mediainfo_meta,"season_posters") and season in mediainfo_meta.season_posters):
+		if (
+			mediainfo_meta and mediainfo_meta.id and
+			hasattr(mediainfo_meta,"season_posters") and
+			season in mediainfo_meta.season_posters
+		):
 			# Yup. Use that.
 			mediainfo_season.poster = mediainfo_meta.season_posters[season]
 		
@@ -2466,3 +2472,8 @@ def load_favourite_items():
 def save_favourite_items(favs):
 	
 	Data.Save(FAVOURITE_ITEMS_KEY, cerealizer.dumps(favs))
+	
+	
+def DoCaptcha(url):
+
+	return Parsing.DoCaptcha(url)

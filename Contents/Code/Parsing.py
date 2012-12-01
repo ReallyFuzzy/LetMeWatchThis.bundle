@@ -32,17 +32,24 @@ def GetMediaInfo(url, mediainfo, query_external=False):
 	soupMassage = copy.copy(BeautifulSoup.MARKUP_MASSAGE)
 	soupMassage.extend(headMassage)
 	
-	soup = BeautifulSoup(HTTP.Request(LMWT_URL + url).content, markupMassage=soupMassage)
+	soup = BeautifulSoup(HTTP.	Request(LMWT_URL + url).content, markupMassage=soupMassage)
 
 	try:
 	
-		imdb_link = soup.find('div','mlink_imdb').a['href']
-		imdb_id = re.search("(tt\d+)", str(imdb_link)).group()
+		imdb_id = None
+		try:
+			imdb_link = soup.find('div','mlink_imdb').a['href']
+			imdb_id = re.search("(tt\d+)", str(imdb_link)).group()
+		except:
+			pass
 		
 		# Construct kwargs.
 		kwargs = {}
-		kwargs['imdb_id'] = imdb_id
+		
+		kwargs['imdb_id'] = imdb_id	
+		kwargs['show_name'] = mediainfo.show_name
 		kwargs['season'] = mediainfo.season
+		
 		if hasattr(mediainfo, 'ep_num'):
 			kwargs['ep_num'] = mediainfo.ep_num
 		
@@ -408,7 +415,8 @@ def GetItemForSource(mediainfo, source_item):
 		# See if we need to hide provider by asking the URL service to normalise it's special
 		# providerinfo URL. This should return a URL where the query string is made up of
 		# all the options that URL Service supports in this plugin's little world. 
-		providerVisible =  'visible=true' in URLService.NormalizeURL(providerInfoURL)
+		providerInfoNormalised = URLService.NormalizeURL(providerInfoURL)
+		providerVisible =  'visible=true' in providerInfoNormalised
 		
 		if (providerVisible):
 	
