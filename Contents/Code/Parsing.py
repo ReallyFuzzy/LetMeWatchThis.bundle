@@ -55,10 +55,11 @@ def GetMediaInfo(url, mediainfo, query_external=False):
 		
 		if (query_external):
 			#Log("Query-ing External Provider")
-			mediainfo = DBProvider().GetProvider(mediainfo.type).RetrieveItemFromProvider(**kwargs)
+			mediainfo_ret = DBProvider().GetProvider(mediainfo.type).RetrieveItemFromProvider(**kwargs)
 			#Log(str(mediainfo))
 		else:
-			mediainfo.id = imdb_id
+			mediainfo_ret = MediaInfo()
+			mediainfo_ret.id = imdb_id
 		
 		# Also parse the LMWT page and extract out any info not set by the meta provider.
 		info_div = soup.find('div', 'movie_info')
@@ -106,20 +107,20 @@ def GetMediaInfo(url, mediainfo, query_external=False):
 				
 			try:
 				# And see if it's already set in the mediaInfo object.
-				mi_val = getattr(mediainfo, mi_item[0], None)
+				mi_val = getattr(mediainfo_ret, mi_item[0], None)
 				
 				#Log("Current mi value: " + str(mi_val))
 				
 				# And set it if it's not already.
 				if (not mi_val):
 					#Log("Setting mi attr " + mi_item[0] + " to: " + str(mi_item[1](info[lmwt_item])))
-					setattr(mediainfo, mi_item[0],  mi_item[1](info[lmwt_item]))
+					setattr(mediainfo_ret, mi_item[0],  mi_item[1](info[lmwt_item]))
 						
 			except Exception, ex:
 				#Log.Exception("Error whilst reading in info from LMWT Page. Field " + lmwt_item)
 				pass
 				
-		return mediainfo
+		return mediainfo_ret
 
 	except Exception, ex:
 		#Log.Exception("Error whilst retrieving mediainfo.")
