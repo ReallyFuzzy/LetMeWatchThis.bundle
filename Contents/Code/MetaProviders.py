@@ -4,7 +4,7 @@ import time
 from datetime import datetime
 from urllib import quote_plus
 
-from tvdb_api.tvdb_exceptions import tvdb_shownotfound
+from tvdb_api.tvdb_exceptions import tvdb_shownotfound, tvdb_attributenotfound
 from tvdb_api.tvdb_api import Tvdb
 
 MOVIEDB_URL = "http://api.themoviedb.org/2.1/Movie.imdbLookup/en/xml/e3dde0b795a9eca51531ce9f8e688ff6/"
@@ -144,19 +144,19 @@ class TVDBProvider(object):
 			if (not show):
 				raisetvdb_shownotfound()
 			
-			mediaInfo.id = show['imdb_id']
+			try:
+				mediaInfo.id = show['imdb_id']
+			except tvdb_attributenotfound, ex:
+				pass
+				
 			mediaInfo.show_name = show['seriesname']
 			mediaInfo.duration = int(show['runtime']) * 60 * 1000
 			mediaInfo.background = show['fanart']
 			mediaInfo.poster = show['poster']
 			mediaInfo.summary = show['overview']
-			
-			Log(kwargs)
-			Log(mediaInfo)
-			
+						
 			if ('season' not in kwargs or kwargs['season'] is None):
 			
-				Log('aaaaaaa')
 				seasons = {}
 				
 				mediaInfo.title = mediaInfo.show_name
