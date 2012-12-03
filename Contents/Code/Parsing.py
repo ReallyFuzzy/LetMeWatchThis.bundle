@@ -201,7 +201,7 @@ def GetSources(url):
 
 ####################################################################################################
 
-def GetTVSeasonEps(url):
+def GetTVSeasonEps(url, no_cache=False):
 
 	# The description meta header for some shows inserts random double quotes in the
 	# content which breaks the parsing of the page. Work around that by simply
@@ -210,7 +210,9 @@ def GetTVSeasonEps(url):
 	soupMassage = copy.copy(BeautifulSoup.MARKUP_MASSAGE)
 	soupMassage.extend(headMassage)	
 	
-	soup = BeautifulSoup(HTTP.Request(LMWT_URL + url).content, markupMassage=soupMassage)
+	cacheTime = 0 if no_cache else HTTP.CacheTime
+	
+	soup = BeautifulSoup(HTTP.Request(LMWT_URL + url, cacheTime=cacheTime).content, markupMassage=soupMassage)
 	
 	eps = []
 	

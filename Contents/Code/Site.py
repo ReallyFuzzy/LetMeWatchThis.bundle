@@ -1,4 +1,5 @@
 VIDEO_PREFIX = "/video/lmwt"
+NAME = "Let Me Watch This"
 
 LATEST_VERSION_URL = 'https://bit.ly/xoGzzQ'
 

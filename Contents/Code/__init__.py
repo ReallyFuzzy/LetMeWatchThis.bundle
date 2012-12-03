@@ -28,7 +28,7 @@ from Favourites     import FavouriteItems
 cerealizer.register(MediaInfo)
 
 VIDEO_PREFIX = Site.VIDEO_PREFIX
-NAME = L('Title')
+NAME = Site.NAME
 
 # Plugin interest tracking.
 VERSION = Site.VERSION
@@ -105,6 +105,30 @@ def Start():
 	# Assign default values for stuff we may need.
 	if (not Dict[LAST_USAGE_TIME_KEY]):
 		Dict[LAST_USAGE_TIME_KEY] = datetime(1900,1,1)
+		
+	# Migrate Favourites Lables to be persitent.
+	if ('FAV_LABELS_PERSISTENT' not in Dict):
+	
+		Log("Migrating Favourite Labels to be persistent.")
+		Thread.AcquireLock(FAVOURITE_ITEMS_KEY)
+		try:
+			labels = []
+			favs = load_favourite_items()
+			
+			for fav in favs.get():
+				labels.extend(fav.labels)
+			
+			Log("Found the following labels: " + str(labels))
+			for label in labels:
+				favs.add_label(label)
+				
+			save_favourite_items(favs)
+			Dict['FAV_LABELS_PERSISTENT'] = True
+		except Exception, ex:
+			Log.Exception("Error migrating labels")
+			pass		
+		finally:
+			Thread.ReleaseLock(FAVOURITE_ITEMS_KEY)
 	
 	# Do a bit of housekeeping... See if any plugins that support our additional
 	# sources functionality are present on this sytem and start a new item check in
@@ -624,7 +648,7 @@ def TVSeasonMenu(mediainfo=None, url=None, item_name=None, path=[], parent_name=
 
 	oc.add(
 		PopupDirectoryObject(
-			key=Callback(TVSeasonActionMenu, mediainfo=mediainfo, path=path),
+			key=Callback(TVSeasonActionMenu, mediainfo=mediainfo, path=path, parent_name=oc.title2),
 			title=L("TVSeasonActionTitle"),
 			art=mediainfo.background,
 			thumb=mediainfo.poster,
@@ -683,9 +707,9 @@ def TVSeasonMenu(mediainfo=None, url=None, item_name=None, path=[], parent_name=
 
 ####################################################################################################
 
-def TVSeasonActionMenu(mediainfo, path):
+def TVSeasonActionMenu(mediainfo, path, parent_name=None):
 
-	oc = ObjectContainer(view_group="InfoList", title1="", title2="")
+	oc = ObjectContainer(view_group="InfoList", title1=parent_name, title2="TV Show Actions")
 	
 	if (Prefs['watched_indicator'] != 'Disabled'):
 		oc.add(
@@ -714,7 +738,7 @@ def TVSeasonActionMenu(mediainfo, path):
 	
 	oc.add(
 		DirectoryObject(
-			key=Callback(HistoryAddToFavouritesMenu, mediainfo=mediainfo, path=[fav_path[0]], parent_name=oc.title2),
+			key=Callback(HistoryAddToFavouritesMenu, mediainfo=mediainfo, path=[fav_path[0]], parent_name="Add Show to Favourites"),
 			title="Add Show to Favourites",
 		)
 	)
@@ -788,7 +812,7 @@ def TVSeasonEpsMenu(mediainfo=None, season_url=None,item_name=None, path=[], par
 	
 	oc.add(
 		PopupDirectoryObject(
-			key=Callback(TVSeasonEpsActionMenu, mediainfo=mediainfo, path=path),
+			key=Callback(TVSeasonEpsActionMenu, mediainfo=mediainfo, path=path, parent_name=oc.title2),
 			title=indicator + str(L("TVSeasonEpsActionTitle")),
 			thumb=mediainfo.poster,
 			art=mediainfo.background,
@@ -847,9 +871,9 @@ def TVSeasonEpsMenu(mediainfo=None, season_url=None,item_name=None, path=[], par
 
 ####################################################################################################
 
-def TVSeasonEpsActionMenu(mediainfo, path):
+def TVSeasonEpsActionMenu(mediainfo, path, parent_name=None):
 
-	oc = ObjectContainer(view_group="InfoList", title1="", title2="Season Actions")
+	oc = ObjectContainer(view_group="InfoList", title1=parent_name, title2="Season Actions")
 	
 	if (Prefs['watched_indicator'] != 'Disabled'):
 		oc.add(
@@ -1616,11 +1640,13 @@ def FavouritesMenu(parent_name=None,label=None, new_items_only=None, replace_par
 			summary = mediainfo.summary
 		else:
 			if (item.new_item_check):
-				local = item.date_last_item_check.replace(tzinfo=tz.tzutc()).astimezone(tz.tzlocal())
 				if (item.new_item):
+					local = item.date_last_item_check.replace(tzinfo=tz.tzutc()).astimezone(tz.tzlocal())
 					summary += str(L("FavouritesNewItemNotifySummaryNew")) % local.strftime("%Y-%m-%d %H:%M")
 				else:
-					summary += str(L("FavouritesNewItemNotifySummaryNoNew")) % local.strftime("%Y-%m-%d %H:%M")
+					last_check = item.date_last_item_check.replace(tzinfo=tz.tzutc()).astimezone(tz.tzlocal())
+					next_check = item.next_check_date().replace(tzinfo=tz.tzutc()).astimezone(tz.tzlocal())
+					summary += str(L("FavouritesNewItemNotifySummaryNoNew")) % (last_check.strftime("%Y-%m-%d %H:%M"), next_check.strftime("%Y-%m-%d %H:%M"))
 		
 		oc.add(
 			PopupDirectoryObject(
@@ -1646,7 +1672,7 @@ def FavouritesMenu(parent_name=None,label=None, new_items_only=None, replace_par
 
 def FavouritesActionMenu(parent_name=None, new_items_only=False, label=None):
 
-	oc = ObjectContainer(no_cache=True, view_group="InfoList", title1="", title2="Clear All Your Favourites?")
+	oc = ObjectContainer(no_history=True, view_group="InfoList", title1=parent_name, title2="Favourite Actions")
 
 	if new_items_only:
 		oc.add(
@@ -1973,6 +1999,8 @@ def FavouritesNotifyMenu(mediainfo=None):
 			fav.items = [show['ep_url'] for show in Parsing.GetTVSeasonEps(url)]
 			
 			fav.date_last_item_check = datetime.utcnow()
+			fav.date_last_item_found = fav.date_last_item_check
+			
 			oc.message = "Plugin will check for new items and notify you when one is available.\nNote that this may slow down the plugin at startup."
 			
 			# If we're the first favourite and user has chosen email notifications,
@@ -2042,6 +2070,7 @@ def CheckForNewItemsInFavourites():
 			CheckForNewItemsInFavourite(fav)
 		except Exception, ex:
 			# If a favourite fails to process, still try to process any other.
+			Log.Exception("Error whilst checking favourite for new items.")
 			pass
 		
 
@@ -2055,16 +2084,7 @@ def CheckForNewItemsInFavourite(favourite, force=False):
 	# Do we want to check this favourite for updates?
 	# If so, only bother if it's not already marked as having updates.
 	# and hasn't been checked in the last 12 hours.
-	if (
-		favourite.new_item_check and
-		(
-			force or
-			(
-				not favourite.new_item and
-				(datetime.utcnow() - favourite.date_last_item_check) > timedelta(hours=12)
-			)
-		)
-	):
+	if (favourite.ready_for_check(force)):
 	
 		#Log("Checking for new item in favourite")
 		
@@ -2072,31 +2092,13 @@ def CheckForNewItemsInFavourite(favourite, force=False):
 		url = [v for k,v in favourite.path[-1].items() if (k == 'show_url' or k == 'season_url')][0]
 	
 		# Get up-to-date list of shows available for the current favourite.
-		items = [show['ep_url'] for show in Parsing.GetTVSeasonEps(url)]
-					
-		# Are there any items in the current show list which aren't in the fav's show list?
-		# Note that all of these should automatically be unwatched since as items are watched,
-		# the favourites are updated with the url of the watched item. So, even if the 
-		# favourite wasn't aware of the watched item (i.e: new item since last check),
-		# it will still have been added to its list of watched items.
-		items_set = set(items)
-		new_items = items_set.difference(set(favourite.items))
-		#Log("Found new items: " + str(new_items))
-			
-		# Items list is different.
-		# Because we may be taking a while to do this
-		# processing (we're relying on making a whole lot of HTTP requests to get
-		# items list), the favourites list may have changed. We could lock it for
-		# the duration of this whole method, but this may be a long lock. Instead,
-		# .....
+		items = [show['ep_url'] for show in Parsing.GetTVSeasonEps(url,no_cache=True)]
+		has_new_items = False
+		
 		Thread.AcquireLock(FAVOURITE_ITEMS_KEY)
 		try:
 			favs_disk = load_favourite_items()
-			fav_disk = favs_disk.get(favourite.mediainfo)[0]
-		
-			fav_disk.new_item = len(new_items) > 0
-			fav_disk.date_last_item_check = datetime.utcnow()
-		
+			has_new_items = favs_disk.check_for_new_items(favourite.mediainfo, items)
 			save_favourite_items(favs_disk)
 		except Exception, ex:
 			Log.Exception("Error saving favourites after new item check.")
@@ -2108,7 +2110,7 @@ def CheckForNewItemsInFavourite(favourite, force=False):
 		# forced (i.e: happened as part of regular checks rather than a force recalculation
 		# of whether any new eps are still available because the user has watched one).
 		try:
-			if (len(new_items) > 0 and Prefs['favourite_notify_email'] and not force):
+			if (has_new_items and Prefs['favourite_notify_email'] and not force):
 				Log('Notifying about new item for title: ' + favourite.mediainfo.title)
 				Notifier.notify(
 					Prefs['favourite_notify_email'],
@@ -2449,12 +2451,17 @@ def CheckAdditionalSources(sources):
 	
 	for source in sources:
 		try:
-			request = urllib2.Request("http://localhost:32400/video/" + source + "/sources/isCompatible")
-			request.add_header('User-agent', USER_AGENT)
-			response = urllib2.urlopen(request).read()
-			Dict[ADDITIONAL_SOURCES_KEY].append(source)
+			# Create the dummy URL that services register themselves under.
+			pluginURL = "http://providerinfo.%s/" % source
+			
+			# Query plex to see if there is a service to handle the URL.
+			if (
+				URLService.ServiceIdentifierForURL(pluginURL) is not None and
+				'sources=true' in URLService.NormalizeURL(pluginURL)
+			):
+				Dict[ADDITIONAL_SOURCES_KEY].append(source)
 		except Exception, ex:
-			Log(str(ex))
+			Log.Exception("Error working out what additional sources are available.")
 			pass
 
 	
