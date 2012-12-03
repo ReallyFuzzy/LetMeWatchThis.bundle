@@ -200,7 +200,7 @@ class ViewedItems(object):
 
 		if (isinstance(url, basestring)):
 			url_set = set([url])
-		else
+		else:
 			url_set = set(url)
 
 		return url_set.issubset([x[1] for x in self.watched_items])
