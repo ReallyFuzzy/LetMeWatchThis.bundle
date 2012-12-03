@@ -2052,15 +2052,18 @@ def CheckForNewItemsInFavourite(favourite, force=False):
 	# If so, only bother if it's not already marked as having updates.
 	# and hasn't been checked in the last 12 hours.
 	if (
-		force or
+		favourite.new_item_check and
 		(
-			favourite.new_item_check and
-			not favourite.new_item and
-			(datetime.utcnow() - favourite.date_last_item_check) > timedelta(hours=12)
+			force or
+			(
+				not favourite.new_item and
+				(datetime.utcnow() - favourite.date_last_item_check) > timedelta(hours=12)
+			)
 		)
 	):
 	
 		#Log("Checking for new item in favourite")
+		#Log(favourite.mediainfo)
 		
 		# Get page URL
 		url = [v for k,v in favourite.path[-1].items() if (k == 'show_url' or k == 'season_url')][0]
