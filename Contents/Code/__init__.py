@@ -2038,7 +2038,11 @@ def CheckForNewItemsInFavourites():
 	favs = load_favourite_items().get()
 		
 	for fav in favs:
-		CheckForNewItemsInFavourite(fav)
+		try:
+			CheckForNewItemsInFavourite(fav)
+		except Exception, ex:
+			# If a favourite fails to process, still try to process any other.
+			pass
 		
 
 ####################################################################################################
@@ -2063,7 +2067,6 @@ def CheckForNewItemsInFavourite(favourite, force=False):
 	):
 	
 		#Log("Checking for new item in favourite")
-		#Log(favourite.mediainfo)
 		
 		# Get page URL
 		url = [v for k,v in favourite.path[-1].items() if (k == 'show_url' or k == 'season_url')][0]
@@ -2096,7 +2099,7 @@ def CheckForNewItemsInFavourite(favourite, force=False):
 		
 			save_favourite_items(favs_disk)
 		except Exception, ex:
-			Log(str(ex))
+			Log.Exception("Error saving favourites after new item check.")
 			pass
 		finally:
 			Thread.ReleaseLock(FAVOURITE_ITEMS_KEY)
@@ -2114,8 +2117,7 @@ def CheckForNewItemsInFavourite(favourite, force=False):
 					favourite.mediainfo.poster
 				)
 		except Exception, ex:
-			Log("ERROR Whilst sending email notification about " + favourite.mediainfo.title)
-			Log(str(ex))
+			Log.Exception("ERROR Whilst sending email notification about " + favourite.mediainfo.title)
 			pass
 			
 			
