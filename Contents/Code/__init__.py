@@ -590,7 +590,11 @@ def TVSeasonMenu(mediainfo=None, url=None, item_name=None, path=[], parent_name=
 	if (mediainfo.year):
 		title = title + " (" + str(mediainfo.year) + ")"
 		
-	oc = ObjectContainer(view_group = "InfoList", title1=parent_name, title2=title)
+	# Get Viewing history if we need an indicator.
+	hist = load_watched_items() if (need_watched_indicator('tv')) else None
+	no_cache = hist is not None
+	
+	oc = ObjectContainer(no_cache=no_cache, view_group = "InfoList", title1=parent_name, title2=title)
 	
 	path = path + [{'elem':mediainfo.show_name, 'show_url':url}]
 	
@@ -648,6 +652,15 @@ def TVSeasonMenu(mediainfo=None, url=None, item_name=None, path=[], parent_name=
 			# Yup. Use that.
 			mediainfo_season.poster = mediainfo_meta.season_posters[season]
 		
+		# Do we have episode information for this information. If so, try to work out
+		# whether we have any unplayed items.
+		indicator = ''
+		if (hist and 'season_episodes' in item):
+			if hist.has_been_watched([x['ep_url'] for x in item['season_episodes']]):
+				indicator = '    '
+			else:
+				indicator =  u"\u00F8" + "  "
+		
 		oc.add(
 			DirectoryObject(
 				key=Callback(
@@ -658,7 +671,7 @@ def TVSeasonMenu(mediainfo=None, url=None, item_name=None, path=[], parent_name=
 					path=path,
 					parent_name=oc.title2,
 				),
-				title=item['season_name'],
+				title=indicator + item['season_name'],
 				tagline="",
 				summary="",
 				thumb=mediainfo_season.poster,

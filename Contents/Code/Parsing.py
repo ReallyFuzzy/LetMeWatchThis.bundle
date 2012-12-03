@@ -4,7 +4,7 @@ import copy
 import sys
 
 from datetime import datetime
-from BeautifulSoup import BeautifulSoup
+from BeautifulSoup import BeautifulSoup, NavigableString
 
 import Utils
 
@@ -261,6 +261,25 @@ def GetTVSeasons(url):
 		
 		if match:
 			season['season_number'] = int(match.group(1))
+
+		eps = []
+		
+		# Get next item that's not a string.
+		ep = item.nextSibling
+		while (ep and isinstance(ep, NavigableString)):
+			ep = ep.nextSibling
+		
+		# While the next item that's not a string is a DIV...
+		while ep and ep.name == 'div':
+			if (ep['class'] == 'tv_episode_item'):
+				eps.append({ 'ep_url': ep.a['href'][1:] })
+			
+			ep = ep.nextSibling
+			while (ep and isinstance(ep, NavigableString)):
+				ep = ep.nextSibling
+			
+		if (len(eps) > 0):
+			season['season_episodes'] = eps
 			
 		seasons.append(season)
 		
