@@ -1481,8 +1481,6 @@ def HistoryRemoveFromRecent(mediainfo, path, parent_name):
 
 def HistoryAddToFavouritesMenu(mediainfo, path, parent_name):
 
-	oc = ObjectContainer(title1=parent_name, title2=L("HistoryAddToFavourites"))
-	
 	# Keep it simple. Add given item and path to favourites.
 	Thread.AcquireLock(FAVOURITE_ITEMS_KEY)
 	try:
@@ -1495,10 +1493,16 @@ def HistoryAddToFavouritesMenu(mediainfo, path, parent_name):
 	finally:
 		Thread.ReleaseLock(FAVOURITE_ITEMS_KEY)
 		
-	oc.header = L("HistoryFavouriteAddedTitle")
-	oc.message = str(L("HistoryFavouriteAddedMsg")) % path[-1]['elem']
-	
-	return oc
+	# If we have any labels for favourites, allow user to add labels now.
+	if (Prefs['favourite_add_labels']):
+		return FavouritesLabelsItemMenu(mediainfo, parent_name)
+	else:	
+		# Otherwise, just show them a message.
+		oc = ObjectContainer(title1=parent_name, title2=L("HistoryAddToFavourites"))
+		oc.header = L("HistoryFavouriteAddedTitle")
+		oc.message = str(L("HistoryFavouriteAddedMsg")) % path[-1]['elem']
+		
+		return oc
 
 
 ####################################################################################################
@@ -1656,6 +1660,18 @@ def FavouritesActionMenu(parent_name=None, new_items_only=False, label=None):
 			)
 		)
 
+	if (label):
+		oc.add(
+			DirectoryObject(
+				key=Callback(
+					FavouritesLabelRemove,
+					parent_name=parent_name,
+					new_items_only=True,
+					label=label
+				),
+				title="Remove Label"
+			)
+		)
 	
 	oc.add(
 		DirectoryObject(
@@ -1769,6 +1785,25 @@ def FavouritesNavPathMenu(mediainfo=None, path=None, new_item_check=None, parent
 	
 	
 	return oc
+	
+####################################################################################################
+
+def FavouritesLabelRemove(parent_name=None, new_items_only=False, label=None):
+
+	Thread.AcquireLock(FAVOURITE_ITEMS_KEY)
+	try:
+		favs = load_favourite_items()
+		favs.del_label(label)
+		save_favourite_items(favs)
+	except Exception, ex:
+		Log.Exception("Error deleting label")
+		pass		
+	finally:
+		Thread.ReleaseLock(FAVOURITE_ITEMS_KEY)
+
+	msg = "Label %s has been removed." % label
+	
+	return MessageContainer("Label Removed", msg)
 
 ####################################################################################################
 
@@ -1810,6 +1845,7 @@ def FavouritesLabelAddMenu(query, mediainfo, parent_name):
 	Thread.AcquireLock(FAVOURITE_ITEMS_KEY)
 	try:
 		favs = load_favourite_items()
+		favs.add_label(query)
 		fav = favs.get(mediainfo)[0]
 		
 		#Log("Adding label to: " + str(fav))

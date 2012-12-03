@@ -10,6 +10,7 @@ class FavouriteItems(object):
 	def __init__(self):
 	
 		self.items = []
+		self.labels = []
 		
 	def add(self, mediainfo, path):
 
@@ -93,17 +94,34 @@ class FavouriteItems(object):
 		
 	def get_labels(self):
 	
-		labels = Set()
-		for fav in self.items:
-			labels = labels.union(fav.labels)
-			
-		labels = sorted(labels)	
+		return sorted(self.labels)	
 		
-		return labels
+	def del_label(self, label):
+
+		for item in self.items:
+			if (label in item.labels):
+				item.labels.remove(label)
+				
+		if (label in self.labels):
+			self.labels.remove(label)
+			Log(self.labels)
+		
+	def add_label(self, label):
+	
+		if (label not in self.labels):
+			self.labels.append(label)
 		
 	def __len__(self):
 	
 		return len(self.items)
+		
+	def __getattr__(self, name):
+	
+		# Old favourites won't have a labels attribute. Manually add it in now.
+		if (name == 'labels'):
+			object.__setattr__(self, 'labels', [])
+			return object.__getattribute__(self,name)
+			
 		
 class FavouriteItem(Object):
 
