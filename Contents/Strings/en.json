@@ -56,7 +56,7 @@
 "FavouritesNewItemNotifyTurnOff":"Stop checking for new items",
 
 "FavouritesNewItemNotifySummaryNew":"New unwatched items were found for this favourite on %s.",
-"FavouritesNewItemNotifySummaryNoNew":"Plugin will regularly check to see if new unwatched items are available.\nLast checked: %s\nNext Check: %s (at earliest)",
+"FavouritesNewItemNotifySummaryNoNew":"Plugin will regularly check to see if new unwatched items are available.\nLast Check: %s\nNext Check: %s (at earliest)",
 
 // =========== TV Season Menu =============
 "TVSeasonActionTitle":"TV Show Actions...",
