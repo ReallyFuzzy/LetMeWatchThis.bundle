@@ -127,7 +127,6 @@ class FavouriteItems(object):
 				
 		if (label in self.labels):
 			self.labels.remove(label)
-			Log(self.labels)
 		
 	def add_label(self, label):
 	
