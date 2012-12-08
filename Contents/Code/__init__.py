@@ -1626,10 +1626,10 @@ def FavouritesMenu(parent_name=None,label=None, new_items_only=None, replace_par
 		if (not label and len(item.labels) > 0):
 			continue
 			
-		mediainfo = str(item.mediainfo)
+		mediainfo = item.mediainfo
 		navpath = item.path
 		
-		title = mediainfo.title
+		title = str(mediainfo.title)
 		if (item.new_item):
 			title =  u"\u00F8" + "  " + title
 		else:
