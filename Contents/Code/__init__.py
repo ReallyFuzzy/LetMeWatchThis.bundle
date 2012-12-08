@@ -1112,7 +1112,7 @@ def SourcesActionTrailerMenu(mediainfo, path):
 	except Exception, ex:
 		return MessageContainer(
 			"No Trailers Found",
-			"Couldn't find any trailers for this movie.\nMovie Name: " + mediainfo.title
+			"Couldn't find any trailers for this movie.\nMovie Name: " + str(mediainfo.title)
 		)
 		
 	objects = []
@@ -1124,14 +1124,14 @@ def SourcesActionTrailerMenu(mediainfo, path):
 		if match:
 			title = match.group(1)
 		
-		if (String.LevenshteinDistance(mediainfo.title.lower(), title.lower()) <= 3):
+		if (String.LevenshteinDistance(str(mediainfo.title).lower(), title.lower()) <= 3):
 			objects.append(object)
 			
 	
 	if (len(objects) == 0):
 		return MessageContainer(
 			"No Trailers Found",
-			"Couldn't find any trailers for this movie.\nMovie Name: " + mediainfo.title
+			"Couldn't find any trailers for this movie.\nMovie Name: " + str(mediainfo.title)
 		)
 	else:
 	
@@ -1143,7 +1143,7 @@ def SourcesActionTrailerMenu(mediainfo, path):
 			
 		return ObjectContainer(
 			no_cache=True,
-			title1=mediainfo.title,
+			title1=str(mediainfo.title),
 			title2="Trailers",
 			objects = objects,
 			art=mediainfo.background,
@@ -1286,12 +1286,12 @@ def HistoryMenu(parent_name=None):
 					poster = mediainfo.season_poster
 				
 			if (Prefs['watched_grouping'] == 'Episode'):
-				title = title + ' - ' + mediainfo.title
+				title = title + ' - ' + str(mediainfo.title)
 				poster = mediainfo.poster
 				summary = mediainfo.summary
 				
 		else:
-			title = mediainfo.title
+			title = str(mediainfo.title)
 			summary = mediainfo.summary
 			
 		oc.add(
@@ -1626,7 +1626,7 @@ def FavouritesMenu(parent_name=None,label=None, new_items_only=None, replace_par
 		if (not label and len(item.labels) > 0):
 			continue
 			
-		mediainfo = item.mediainfo
+		mediainfo = str(item.mediainfo)
 		navpath = item.path
 		
 		title = mediainfo.title
@@ -1854,7 +1854,7 @@ def FavouritesLabelsItemMenu(mediainfo, parent_name, replace_parent=False):
 	# Load up Favourites.
 	favs = load_favourite_items() 
 		
-	oc = ObjectContainer(no_cache=True, replace_parent=replace_parent, title1=parent_name, title2="Labels for " + mediainfo.title)
+	oc = ObjectContainer(no_cache=True, replace_parent=replace_parent, title1=parent_name, title2="Labels for " + str(mediainfo.title))
 	
 	oc.add(
 		InputDirectoryObject(
@@ -2114,7 +2114,7 @@ def CheckForNewItemsInFavourite(favourite, force=False):
 		# of whether any new eps are still available because the user has watched one).
 		try:
 			if (has_new_items and Prefs['favourite_notify_email'] and not force):
-				Log('Notifying about new item for title: ' + favourite.mediainfo.title)
+				Log('Notifying about new item for title: ' + str(favourite.mediainfo.title))
 				Notifier.notify(
 					Prefs['favourite_notify_email'],
 					str(NAME),
@@ -2122,7 +2122,7 @@ def CheckForNewItemsInFavourite(favourite, force=False):
 					favourite.mediainfo.poster
 				)
 		except Exception, ex:
-			Log.Exception("ERROR Whilst sending email notification about " + favourite.mediainfo.title)
+			Log.Exception("ERROR Whilst sending email notification about " + str(favourite.mediainfo.title))
 			pass
 			
 			
