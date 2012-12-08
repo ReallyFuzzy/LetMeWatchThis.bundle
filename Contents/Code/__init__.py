@@ -1616,58 +1616,62 @@ def FavouritesMenu(parent_name=None,label=None, new_items_only=None, replace_par
 	# For each favourite item....
 	for item in favs.get(sort=sort_order):
 	
-		#Log(item.mediainfo.title)
-		
-		# If a label has been given, see if the item has the current label. 
-		if (label and label not in item.labels):
-			continue
+		try:
+			#Log(item.mediainfo.title)
 			
-		# If no label has been given, check that the item also has no label
-		if (not label and len(item.labels) > 0):
-			continue
-			
-		mediainfo = item.mediainfo
-		navpath = item.path
-		
-		title = str(mediainfo.title)
-		if (item.new_item):
-			title =  u"\u00F8" + "  " + title
-		else:
-			title =  '    ' + title
-			if (new_items_only):
+			# If a label has been given, see if the item has the current label. 
+			if (label and label not in item.labels):
 				continue
 				
-		# If the item is a TV show, come up with sensible display name.
-		summary = ""
-		if (mediainfo.type == 'movies'):
-			summary = mediainfo.summary
-		else:
-			if (item.new_item_check):
-				if (item.new_item):
-					local = item.date_last_item_check.replace(tzinfo=tz.tzutc()).astimezone(tz.tzlocal())
-					summary += str(L("FavouritesNewItemNotifySummaryNew")) % local.strftime("%Y-%m-%d %H:%M")
-				else:
-					last_check = item.date_last_item_check.replace(tzinfo=tz.tzutc()).astimezone(tz.tzlocal())
-					next_check = item.next_check_date().replace(tzinfo=tz.tzutc()).astimezone(tz.tzlocal())
-					summary += str(L("FavouritesNewItemNotifySummaryNoNew")) % (last_check.strftime("%Y-%m-%d %H:%M"), next_check.strftime("%Y-%m-%d %H:%M"))
-		
-		oc.add(
-			PopupDirectoryObject(
-				key=Callback(
-					FavouritesNavPathMenu,
-					mediainfo=item.mediainfo,
-					path=item.path,
-					new_item_check=item.new_item_check,
-					parent_name=oc.title2
-				),
-				title= title,
-				summary=summary,
-				art=mediainfo.background,
-				thumb= mediainfo.poster,
-				duration=mediainfo.duration,
+			# If no label has been given, check that the item also has no label
+			if (not label and len(item.labels) > 0):
+				continue
 				
+			mediainfo = item.mediainfo
+			navpath = item.path
+			
+			title = str(mediainfo.title)
+			if (item.new_item):
+				title =  u"\u00F8" + "  " + title
+			else:
+				title =  '    ' + title
+				if (new_items_only):
+					continue
+					
+			# If the item is a TV show, come up with sensible display name.
+			summary = ""
+			if (mediainfo.type == 'movies'):
+				summary = mediainfo.summary
+			else:
+				if (item.new_item_check):
+					if (item.new_item):
+						local = item.date_last_item_check.replace(tzinfo=tz.tzutc()).astimezone(tz.tzlocal())
+						summary += str(L("FavouritesNewItemNotifySummaryNew")) % local.strftime("%Y-%m-%d %H:%M")
+					else:
+						last_check = item.date_last_item_check.replace(tzinfo=tz.tzutc()).astimezone(tz.tzlocal())
+						next_check = item.next_check_date().replace(tzinfo=tz.tzutc()).astimezone(tz.tzlocal())
+						summary += str(L("FavouritesNewItemNotifySummaryNoNew")) % (last_check.strftime("%Y-%m-%d %H:%M"), next_check.strftime("%Y-%m-%d %H:%M"))
+			
+			oc.add(
+				PopupDirectoryObject(
+					key=Callback(
+						FavouritesNavPathMenu,
+						mediainfo=item.mediainfo,
+						path=item.path,
+						new_item_check=item.new_item_check,
+						parent_name=oc.title2
+					),
+					title= title,
+					summary=summary,
+					art=mediainfo.background,
+					thumb= mediainfo.poster,
+					duration=mediainfo.duration,
+					
+				)
 			)
-		)
+
+		except Exception, ex:
+			Log.Exception("Error whilst dispaying a favourite. MediaInfo was: " + str(item.mediainfo))
 			
 	return oc
 
