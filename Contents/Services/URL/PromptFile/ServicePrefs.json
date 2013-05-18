@@ -1,0 +1,1 @@
+[	{		"id": "show_promptfile", "label": "PromptFile",		"type": "bool", "default": "true",	},]
