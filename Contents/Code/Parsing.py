@@ -10,8 +10,8 @@ import Utils
 
 from MetaProviders import DBProvider, MediaInfo
 
-LMWT_URL = "http://www.letmewatchthis.ch/"
-LMWT_SEARCH_URL= "http://www.letmewatchthis.ch/index.php"
+LMWT_URL = "http://www.primewire.ag/"
+LMWT_SEARCH_URL= "http://www.primewire.ag/index.php"
 
 ####################################################################################################
 # LMWT PAGE PARSING
