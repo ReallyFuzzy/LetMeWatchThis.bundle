@@ -99,8 +99,12 @@ def Start():
 	HTTP.Headers['Accept-Encoding'] = '*gzip, deflate'
 	HTTP.Headers['Connection'] = 'keep-alive'
 
-	if hasattr(Site, 'Start'):
-		Site.Start()
+	if hasattr(Site, 'Init'):
+		Site.Init()
+		
+	if hasattr(Parsing, 'Init'):
+		Parsing.Init()
+
 	
 	# Assign default values for stuff we may need.
 	if (not Dict[LAST_USAGE_TIME_KEY]):

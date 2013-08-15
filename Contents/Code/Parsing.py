@@ -10,8 +10,24 @@ import Utils
 
 from MetaProviders import DBProvider, MediaInfo
 
-LMWT_URL = "http://www.primewire.ag/"
-LMWT_SEARCH_URL= "http://www.primewire.ag/index.php"
+LMWT_URL = "http://www.letmewatchthis.ch/"
+LMWT_SEARCH_URL= "%sindex.php"
+
+
+def Init():
+
+	# Check for current provider URL.
+	if ('LMWT_URL' not in Dict):
+		Dict['LMWT_URL'] = LMWT_URL
+		
+	try:	
+		content = HTML.ElementFromURL("https://github.com/ReallyFuzzy/LetMeWatchThis.bundle/wiki/CurrentURI",cacheTime=0)
+		Dict['LMWT_URL'] = str(content.xpath("//div[@class='markdown-body']//a/@href")[0])
+	except Exception,ex:
+		Log(ex)
+		pass
+	
+	Dict['LMWT_SEARCH_URL'] = LMWT_SEARCH_URL % Dict['LMWT_URL']
 
 ####################################################################################################
 # LMWT PAGE PARSING
@@ -32,7 +48,7 @@ def GetMediaInfo(url, mediainfo, query_external=False):
 	soupMassage = copy.copy(BeautifulSoup.MARKUP_MASSAGE)
 	soupMassage.extend(headMassage)
 	
-	soup = BeautifulSoup(HTTP.	Request(LMWT_URL + url).content, markupMassage=soupMassage)
+	soup = BeautifulSoup(HTTP.Request(Dict['LMWT_URL'] + url).content, markupMassage=soupMassage)
 
 	try:
 	
@@ -137,7 +153,7 @@ def GetSources(url):
 	soupMassage = copy.copy(BeautifulSoup.MARKUP_MASSAGE)
 	soupMassage.extend(headMassage)	
 	
-	soup = BeautifulSoup(HTTP.Request(LMWT_URL + url).content, markupMassage=soupMassage)
+	soup = BeautifulSoup(HTTP.Request(Dict['LMWT_URL'] + url).content, markupMassage=soupMassage)
 
 	sources = []
 	
@@ -212,7 +228,7 @@ def GetTVSeasonEps(url, no_cache=False):
 	
 	cacheTime = 0 if no_cache else HTTP.CacheTime
 	
-	soup = BeautifulSoup(HTTP.Request(LMWT_URL + url, cacheTime=cacheTime).content, markupMassage=soupMassage)
+	soup = BeautifulSoup(HTTP.Request(Dict['LMWT_URL'] + url, cacheTime=cacheTime).content, markupMassage=soupMassage)
 	
 	eps = []
 	
@@ -249,7 +265,7 @@ def GetTVSeasons(url):
 	soupMassage = copy.copy(BeautifulSoup.MARKUP_MASSAGE)
 	soupMassage.extend(headMassage)	
 	
-	soup = BeautifulSoup(HTTP.Request(LMWT_URL + url).content, markupMassage=soupMassage)
+	soup = BeautifulSoup(HTTP.Request(Dict['LMWT_URL'] + url).content, markupMassage=soupMassage)
 
 	seasons = []
 
@@ -340,7 +356,7 @@ def GetItems(type, genre = None, sort = None, alpha = None, pages = 5, start_pag
 
 def GetURL(type, genre = None, sort = None, page_num = None, alpha = None):
 
-	url = LMWT_URL + "?" + type + "="
+	url = Dict['LMWT_URL'] + "?" + type + "="
 	
 	if (sort is not None):
 		url = url + "&sort=" + sort
@@ -380,14 +396,14 @@ def GetSearchResults(query=None,type=None,imdb_id=None):
 		
 	else:
 	
-		soup = BeautifulSoup(HTTP.Request(LMWT_SEARCH_URL + "?search",cacheTime=0).content)
+		soup = BeautifulSoup(HTTP.Request(Dict['LMWT_SEARCH_URL'] + "?search",cacheTime=0).content)
 		key = soup.find('input', { 'type': 'hidden', 'name': 'key' })['value']
 		
 		section = "1"
 		if (type == "tv"):
 			section = "2"
 		
-		url = LMWT_SEARCH_URL + "?search_section=" + section + "&search_keywords=" + urllib.quote_plus(query) + "&key=" + key + "&sort=views"
+		url = Dict['LMWT_SEARCH_URL'] + "?search_section=" + section + "&search_keywords=" + urllib.quote_plus(query) + "&key=" + key + "&sort=views"
 		soup = BeautifulSoup(HTTP.Request(url,cacheTime=0).content)
 		#Log(soup)
 		
@@ -443,7 +459,7 @@ def GetItemForSource(mediainfo, source_item):
 		if (providerVisible):
 	
 			return VideoClipObject(
-				url=LMWT_URL + source_item['url'],
+				url=Dict['LMWT_URL'] + source_item['url'],
 				title=source_item['name'] + " - " + source_item['provider_name'],
 				summary=mediainfo.summary,
 				art=mediainfo.background,
@@ -457,3 +473,4 @@ def GetItemForSource(mediainfo, source_item):
 			)
 			
 	return None
+	
