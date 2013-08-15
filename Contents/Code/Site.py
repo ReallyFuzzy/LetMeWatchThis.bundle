@@ -6,6 +6,7 @@ LATEST_VERSION_URL = 'https://bit.ly/xoGzzQ'
 # Plugin interest tracking.
 VERSION = "13.05.10.1"
 VERSION_URLS = {
+	"13.08.15.1": "http://bit.ly/ZTqp3A",
 	"13.05.10.1": "http://bit.ly/ZTqp3A",
 	"13.05.05.1": "http://bit.ly/102Wvtb",
 	"12.12.11.1": "http://bit.ly/UQnFkz",
