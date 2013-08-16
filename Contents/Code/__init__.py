@@ -1107,7 +1107,7 @@ def SourcesActionMenu(mediainfo, path):
 def SourcesActionTrailerMenu(mediainfo, path):
 
 	try:
-		result = SearchService.Query(urllib.quote(mediainfo.title), "com.plexapp.plugins.amt", None)
+		result = SearchService.Query(str(mediainfo.title), "com.plexapp.plugins.amt", None)
 	except KeyError, ex:
 		return MessageContainer(
 			"'Apple Movie Trailers' plugin not found.",
