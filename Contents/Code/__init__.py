@@ -1226,6 +1226,13 @@ def SearchResultsMenu(query, type, parent_name=None):
 	if (type=="movies"):
 		func_name = SourcesMenu
 		
+	# Strip out the year out of the given search term if one is found.
+	# This helps auto-complete work on the Roku client which runs searches
+	# as users are entering data  and then lets users select those results
+	# as a new search term.
+	if (re.search("\s*\(\d*\)", query)):
+		query = re.sub("\s*\(\d*\)\s*","",query)
+
 	for item in Parsing.GetSearchResults(query=query, type=type):
 		title = item.title + " (" + str(item.year) + ")" if item.year else item.title
 		oc.add(
