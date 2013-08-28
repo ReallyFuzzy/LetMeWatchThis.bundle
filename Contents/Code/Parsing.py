@@ -170,12 +170,12 @@ def GetSources(url):
 			continue
 		
 		# Extract out source quality.
-		quality_elem = item.find('span', { 'class': re.compile('quality_.*') })
-		quality = re.search("quality_(.*)", quality_elem['class']).group(1)
-		source['quality'] = quality
+		#quality_elem = item.find('span', { 'class': re.compile('quality_.*') })
+		#quality = re.search("quality_(.*)", quality_elem['class']).group(1)
+		#source['quality'] = quality
 		
-		if (quality == 'sponsored'):
-			continue
+		#if (quality == 'sponsored'):
+		#	continue
 				
 		# Extract out source provider name.
 		provider_name = None
@@ -192,6 +192,9 @@ def GetSources(url):
 				provider_name = "sockshare.com"
 			elif (prov_name_tag.img['src'].find('host_48') >= 0):
 				provider_name = "putlocker.com"
+			
+		if ("sponsor" in provider_name.lower()):
+			continue
 			
 		source['provider_name'] = provider_name
 		
