@@ -415,7 +415,7 @@ def TypeMenu(type=None, genre=None, path=[], parent_name=None):
 					title="Search",
 					tagline="Search for a title using this feature",
 					summary="Search for a title using this feature",
-					prompt="Please enter a search term",
+					prompt="Search for items containing...",
 					thumb=R(SEARCH_ICON),
 					art=R(ART)				
 				)
@@ -1225,15 +1225,19 @@ def SearchResultsMenu(query, type, parent_name=None):
 	func_name = TVSeasonMenu
 	if (type=="movies"):
 		func_name = SourcesMenu
-		
+	
+	exact = False
+	
 	# Strip out the year out of the given search term if one is found.
 	# This helps auto-complete work on the Roku client which runs searches
 	# as users are entering data  and then lets users select those results
 	# as a new search term.
+	
 	if (re.search("\s*\(\d*\)", query)):
 		query = re.sub("\s*\(\d*\)\s*","",query)
+		exact = True
 
-	for item in Parsing.GetSearchResults(query=query, type=type):
+	for item in Parsing.GetSearchResults(query=query, type=type, exact=exact):
 		title = item.title + " (" + str(item.year) + ")" if item.year else item.title
 		oc.add(
 			DirectoryObject(

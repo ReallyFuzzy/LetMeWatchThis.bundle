@@ -383,7 +383,7 @@ def GetURL(type, genre = None, sort = None, page_num = None, alpha = None):
 	
 ####################################################################################################
 
-def GetSearchResults(query=None,type=None,imdb_id=None):
+def GetSearchResults(query=None,type=None,imdb_id=None, exact=False):
 	
 	items = []
 	
@@ -437,7 +437,8 @@ def GetSearchResults(query=None,type=None,imdb_id=None):
 			
 			# Add to item list.
 			#Log("Adding item: " + str(res))
-			items.append(res)
+			if not exact or res.title.lower() == query.lower():
+				items.append(res)
 	
 	#Log(items)
 	return items
