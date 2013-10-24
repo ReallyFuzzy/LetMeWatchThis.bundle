@@ -1,0 +1,120 @@
+import re, urlparse, cgi, urllib2
+from datetime import date
+from BeautifulSoup import BeautifulSoup
+
+
+USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_7_2) AppleWebKit/534.51.22 (KHTML, like Gecko) Version/5.1.1 Safari/534.51.22'
+
+def NormalizeURL(url):
+
+	#Log("*********** In TheFile normalizeURL")
+
+	# Deal with special providerInfo URL built up by plugin to return
+	# info about this provider. For all other normal URLs, do nothing. 
+	if ("providerinfo" in url):
+	
+		# Extract out domain.
+		match = re.search("(thefile)", url.lower())
+		if (match is None):
+			return url
+	
+		try:
+			show = Prefs["show_" + match.group(1)]
+		except Exception, ex:
+			show = False
+			
+		if (show):
+			return url + "&visible=true"
+		else:
+			return url
+			
+	else:
+		return url
+		
+def MetadataObjectForURL(url):
+ 
+	#Log('In MetadataObjectForURL for TheFile (' + url + ')')
+	
+	return VideoClipObject(
+		title = 'TheFile Redirect Page',
+		summary = 'TheFile Redirect Page',
+		thumb = None,
+	)
+
+def MediaObjectsForURL(url):
+
+	#Log('In MediaObjectsForURL for TheFile (' + url + ')')
+	
+	return [
+		MediaObject(
+			parts = [PartObject(key=Callback(PlayVideo, url=url))],
+		)
+	]
+
+@indirect
+def PlayVideo(url):
+
+	# Request Initial Provider page.
+	try:
+		#Log('Requesting ' + url)
+		soup = BeautifulSoup(HTTP.Request(url).content)
+		
+	except Exception, ex:
+		return LogProviderError("Error whilst retrieving initial provider page (" + url + ")", ex)
+	
+	
+	# Extract out these form elements if present...
+	try:
+		formElems = ['down_direct', 'id', 'op', 'referer', 'rand']
+		params = {}
+		
+		for formElem in formElems:
+			formElemVal =  soup.find('input', {'name' : formElem })['value']
+			params[formElem] = formElemVal
+			
+	except Exception, ex:
+		return LogProviderError("Error whilst extracting out form elemnts to navigate to 2nd page.",ex)
+		
+	
+	# Navigate to download page.
+	try:
+		contents = HTTP.Request(url, values=params, headers={ 'Referer': url }, cacheTime=0).content
+		soup = BeautifulSoup(contents)	
+	except Exception, ex:
+		return LogProviderError("Error whilst retrieving download page (" + url + ")", ex)
+	
+	# Get final video location from page.
+	try:
+	
+		# This works but is very likely to break as it'll take a simple site
+		# change for it to stop working.
+		final_url = soup.find('h3',{ 'class':'x'}).span.a['href']
+		final_url = final_url.replace(" ","+")
+		
+	except Exception, ex:
+		return LogProviderError("Error whilst retrieving final url from download page.", ex)
+	
+	Log(final_url)
+	
+	oc = ObjectContainer(
+		objects = [
+			VideoClipObject(
+				items = [
+					MediaObject(
+						parts = [PartObject(key=final_url)]
+					)
+				]
+			)
+		]
+	)
+	
+	# Might as well set a sensible user agent string.
+	oc.user_agent = USER_AGENT
+	
+	return oc
+	
+def LogProviderError(msg="", ex=None):
+
+	Log("************************** PROVIDER ERROR: " + msg)
+	raise Exception(msg)
+	return []
