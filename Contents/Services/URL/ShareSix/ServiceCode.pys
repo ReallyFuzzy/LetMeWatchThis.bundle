@@ -65,7 +65,7 @@ def PlayVideo(url):
 	
 	# Extract out these form elements if present...
 	try:
-		formElems = ['op', 'id', 'down_direct', 'method_free', 'method_premium', 'rand']
+		formElems = ['op', 'id', 'fname', 'method_free', 'referer']
 		params = {}
 		
 		for formElem in formElems:
@@ -82,8 +82,27 @@ def PlayVideo(url):
 	except Exception, ex:
 		return LogProviderError("Error whilst retrieving second provider page (" + url + ")", ex)
 	
+	# Extract out these form elements if present...
+	try:
+		formElems = ['down_direct', 'id', 'method_premium', 'method_free', 'op', 'rand', 'referer']
+		params = {}
+		
+		for formElem in formElems:
+			formElemVal =  soup.find('input', {'name' : formElem })['value']
+			params[formElem] = formElemVal
 			
-	# Get final video location from API.
+	except Exception, ex:
+		return LogProviderError("Error whilst extracting out form elemnts to navigate to download page.",ex)
+	
+	# Navigate to download page.
+	try:
+		contents = HTTP.Request(url, values=params, headers={ 'Referer': url }, cacheTime=0).content
+		soup = BeautifulSoup(contents)	
+	except Exception, ex:
+		return LogProviderError("Error whilst retrieving second provider page (" + url + ")", ex)
+	
+	
+	# Get final video location from download page.
 	try:
 	
 		# This works but is very likely to break as it'll take a simple site
