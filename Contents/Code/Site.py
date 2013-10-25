@@ -4,8 +4,9 @@ NAME = "Let Me Watch This"
 LATEST_VERSION_URL = 'https://bit.ly/xoGzzQ'
 
 # Plugin interest tracking.
-VERSION = "13.08.28.1"
+VERSION = "13.10.25.1"
 VERSION_URLS = {
+	"13.10.25.1": "http://bit.ly/1dq1mfX",
 	"13.08.28.1": "http://bit.ly/ZTqp3A",
 	"13.08.15.1": "http://bit.ly/ZTqp3A",
 	"13.05.10.1": "http://bit.ly/ZTqp3A",

@@ -1,3 +1,9 @@
+Version 13.10.25.1 ==============
+
+* Fix up VidHog, MovShare (and family), MovPod (and family), ShareSix
+* New provider BillionUploads, NOSVideo, TheFile
+* Fix up meta data for movies.
+
 Version 13.08.28.1 ==============
 
 * Fix up trailers integration.
