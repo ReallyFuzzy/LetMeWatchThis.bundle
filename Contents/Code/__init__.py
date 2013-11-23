@@ -2,6 +2,7 @@ import re
 import cerealizer
 import urllib
 import urllib2
+import urlparse
 import copy
 import sys
 import base64
@@ -21,6 +22,7 @@ import Notifier
 import Site
 import Utils
 
+from NavExObject    import CaptchaRequiredObject
 from MetaProviders  import DBProvider, MediaInfo
 from RecentItems    import BrowsedItems, ViewedItems
 from Favourites     import FavouriteItems
@@ -49,6 +51,7 @@ PREFS_ICON = 'icon-prefs.png'
 SEARCH_ICON='icon-search.png'
 MOVIE_ICON='icon-movie.png'
 TV_ICON='icon-tv.png'
+ADDITIONAL_SOURCES_ICON='icon-additional-sources.png'
 STANDUP_ICON='icon-standup.png'
 GENRE_BASE='icon-genre'
 GENRE_ICON=GENRE_BASE + '.png'
@@ -101,10 +104,9 @@ def Start():
 
 	if hasattr(Site, 'Init'):
 		Site.Init()
-		
+	
 	if hasattr(Parsing, 'Init'):
 		Parsing.Init()
-
 	
 	# Assign default values for stuff we may need.
 	if (not Dict[LAST_USAGE_TIME_KEY]):
@@ -145,6 +147,10 @@ def Start():
 #  http://dev.plexapp.com/docs/Functions.html#ValidatePrefs
 
 def ValidatePrefs():
+
+	# Fore reloading of site URL.
+	if hasattr(Parsing, 'Init'):
+		Parsing.Init()
 
 	if (Prefs['favourite_notify_email']):
 		# Enable cron if we have favourites which are already being checked.
@@ -966,7 +972,7 @@ def SourcesMenu(mediainfo=None, url=None, item_name=None, path=[], parent_name=N
 		mediainfo2 = mediainfo
 	else:
 		# We did, but do we know more than the meta data provider?
-		# Copy some values across from what we've been passed from LMWT / have built up
+		# Copy some values across from what we've been passed from provider / have built up
 		# as we're navigating if meta provider couldn't find data.
 		if mediainfo2.poster is None:
 			mediainfo2.poster = mediainfo.poster
@@ -995,18 +1001,20 @@ def SourcesMenu(mediainfo=None, url=None, item_name=None, path=[], parent_name=N
 	providerURLs = []
 	for source_item in Parsing.GetSources(url):
 	
-		mediaItem = GetItemForSource(mediainfo=mediainfo2, source_item=source_item)
+		mediaItem = GetItemForSource(mediainfo=mediainfo2, source_item=source_item, parent_name=oc.title2)
 		
-		if mediaItem is not None:
-			oc.add(mediaItem)
-			if (hasattr(mediaItem, 'url')):
-				providerURLs.append(mediaItem.url)
+		if mediaItem is not None and 'item' in mediaItem and mediaItem['item'] is not None:
+			oc.add(mediaItem['item'])
+			if ('url' in mediaItem and mediaItem['url'] is not None):
+				providerURLs.append(mediaItem['url'])
 				
 	if (not external_caller and len(Dict[ADDITIONAL_SOURCES_KEY]) > 0):
 		oc.add(
 			DirectoryObject(
 				key=Callback(SourcesAdditionalMenu, mediainfo=mediainfo2),
 				title="Additional Sources...",
+				#art=mediainfo2.background,
+				thumb=R(ADDITIONAL_SOURCES_ICON),
 			)
 		)
 		
@@ -1047,7 +1055,7 @@ def SourcesAdditionalMenu(mediainfo):
 	# Can't use Redirect as it doesn't seem to be supported by some clients <sigh>
 	# So get the data for them instead by manually doing the redirect ourselves.
 	request = urllib2.Request(url)
-	request.add_header('Referer', "http://localhost:32400" + VIDEO_PREFIX + "/")
+	request.add_header('Referer', PLUGIN_URL)
 	return urllib2.urlopen(request).read()
 
 
@@ -1218,6 +1226,101 @@ def SourcesActionWatch(item_name=None, items=None, action="watch"):
 	
 ####################################################################################################
 
+def CaptchaRequiredMenu(mediainfo, source_item, url, parent_name=None, replace_parent=False):
+
+	# Cache required as some clients will re-request menu after looking at captcha image.
+	oc = ObjectContainer(no_cache=False, view_group="InfoList", user_agent=USER_AGENT, no_history=True, title1=parent_name, title2="Captcha", replace_parent=replace_parent)
+		
+	# Get the media sources for the passed in URL.
+	# This should be made up of two Media Objects:
+	#  1) URL of the CAPTCHA
+	#  2) New URL of the video to play
+	
+	media_objects = URLService.MediaObjectsForURL(url)
+	
+	captcha_img_URL = media_objects[0].parts[0].key
+	solve_captcha_URL = media_objects[1].parts[0].key
+	
+	#Log("In captchaRequiredMenu, url: " + url + ", captcha_img_URL:" + captcha_img_URL + ", solve_captcha_URL: " + solve_captcha_URL)
+	
+	oc.add(
+		InputDirectoryObject(
+			key=Callback(CaptchaProcessMenu, mediainfo=mediainfo, source_item=source_item, url=url, solve_captcha_url=solve_captcha_URL, parent_name=oc.title1),
+			title="Enter Captcha...",
+			prompt="Enter Captcha to view item.",
+			tagline="This provider requires that you solve this Captcha.",
+			summary="This provider requires that you solve this Captcha.",
+			thumb=PLUGIN_URL + "/proxy?" + urllib.urlencode({'url':captcha_img_URL}),
+			art=mediainfo.background,
+		)
+	)
+	
+	return oc
+	
+def CaptchaProcessMenu(query, mediainfo, source_item, url, solve_captcha_url, parent_name=None):
+
+	oc = ObjectContainer(
+			view_group="InfoList", user_agent=USER_AGENT, no_history=True, replace_parent=True,
+			title1=parent_name, title2="Succesful Captcha"
+	)
+	
+	#Log("In captchaProcessMenu, url: " + url + ", solveCaptchaURL:" + solve_captcha_url)
+
+	# Some clients (I'm looking at you here iOS) seem to ignore the URLService resolved parts that
+	# get added when this is returned to it and instead re-request the main video clip object's URL
+	# to get it resolved again when the user chooses to play the video. Because Captcha's are a
+	# one go only affair, the second call fails and the URL dosen't end up being resolved. And
+	# then we have a sad client with no videos :( So, instead, manually resolve the post-Captcha
+	# URL here so we can set that in the VideoClipObject.
+	try:
+		video_media = URLService.MediaObjectsForURL(solve_captcha_url + "&" + urllib.urlencode({"captcha":query}))
+	except Exception, ex:
+		# Something went wrong. Chances are the Captcha is wrong. Go back and load a new one.
+		# FIXME: Need tighter error checking.
+		return CaptchaRequiredMenu(mediainfo=mediainfo, source_item=source_item, url=url, parent_name=parent_name, replace_parent=True)
+			
+	video_url = video_media[0].parts[0].key
+	
+	# The url arg is still the original URL returned by GetItemForSource and will be the one that
+	# was used to store all the different possible URLs for the current item. Pass that along to
+	# the current site's playURL so that it can mark the video has played when the user selects
+	# the VideoClipObjecy.
+	if (hasattr(Site,"GetCaptchaPlayURL")):
+		video_url = Site.GetCaptchaPlayURL() % (urllib.quote_plus(url), urllib.quote_plus(video_url))
+
+	vc = VideoClipObject(
+		url=video_url,
+		title="Play Now",
+		summary=mediainfo.summary,
+		art=mediainfo.background,
+		thumb= mediainfo.poster,
+		rating = float(mediainfo.rating) if mediainfo.rating else None,
+		duration=mediainfo.duration,
+		year=mediainfo.year,
+		originally_available_at=mediainfo.releasedate,
+		genres=mediainfo.genres,
+	)
+				
+	oc.add(vc)
+	
+	return oc
+	
+# Utility methods for captchas. All requests in the Captcha cycle must come from the same User-Agent
+# If just let the clients load the Captcha image, we get different User-Agents. Some us libcurl and
+# it'd be possible to force a specific user agent using the "url|extraparams" notation, however some
+# clients use the transcoder which does it's own separate thing and doesn't understand libcurl params.
+# So, instead, we rewrite the Captcha's image URL to pass through this, so we can forcibly set
+# the user-agent.
+#
+# Yup.... This is all rubbish.
+@route(VIDEO_PREFIX + '/proxy')
+def Proxy(url):
+
+	#Log(url)
+	return HTTP.Request(url,headers={'User-Agent':USER_AGENT}).content
+	
+	
+####################################################################################################
 def SearchResultsMenu(query, type, parent_name=None):
 
 	Dict[LAST_USAGE_TIME_KEY] = datetime.utcnow()
@@ -1229,7 +1332,7 @@ def SearchResultsMenu(query, type, parent_name=None):
 	func_name = TVSeasonMenu
 	if (type=="movies"):
 		func_name = SourcesMenu
-	
+		
 	exact = False
 	
 	# Strip out the year out of the given search term if one is found.
@@ -1240,7 +1343,7 @@ def SearchResultsMenu(query, type, parent_name=None):
 	if (re.search("\s*\(\d*\)", query)):
 		query = re.sub("\s*\(\d*\)\s*","",query)
 		exact = True
-
+		
 	for item in Parsing.GetSearchResults(query=query, type=type, exact=exact):
 		title = item.title + " (" + str(item.year) + ")" if item.year else item.title
 		oc.add(
@@ -1691,7 +1794,7 @@ def FavouritesMenu(parent_name=None,label=None, new_items_only=None, replace_par
 
 		except Exception, ex:
 			Log.Exception("Error whilst dispaying a favourite. MediaInfo was: " + str(item.mediainfo))
-			
+		
 	return oc
 
 ####################################################################################################
@@ -2153,25 +2256,44 @@ def CheckForNewItemsInFavourite(favourite, force=False):
 # Params:
 #   mediainfo: A MediaInfo item for the current item being viewed (either a movie or single episode).
 #   item:  A dictionary containing information for the selected source for the item being viewed.
-def GetItemForSource(mediainfo, source_item):
+def GetItemForSource(mediainfo, source_item, parent_name):
 	
 	media_item = Parsing.GetItemForSource(mediainfo, source_item)
 	
 	if media_item is not None:
-		return media_item
+	
+		if (isinstance(media_item,CaptchaRequiredObject)):
+		
+			return {
+				'item':
+					DirectoryObject(
+						key = Callback(CaptchaRequiredMenu, mediainfo=mediainfo, source_item=source_item, url=media_item.url, parent_name=parent_name),
+						title = media_item.title + " (Captcha)",
+						summary= mediainfo.summary,
+						art=mediainfo.background,
+						thumb= mediainfo.poster,
+					),
+				'url': media_item.url
+			}
+		else:
+			return { 'item': media_item, 'url': media_item.url }
 		
 	# The only way we can get down here is if the provider wasn't supported or
 	# the provider was supported but not visible. Maybe user still wants to see them?
 	if (Prefs['show_unsupported']):
-		return DirectoryObject(
-			key = Callback(PlayVideoNotSupported, mediainfo = mediainfo),
-			title = source_item['name'] + " - " + source_item['provider_name'] + " (Not playable)",
-			summary= mediainfo.summary,
-			art=mediainfo.background,
-			thumb= mediainfo.poster,
-		)
+		return {
+			'item': 
+				DirectoryObject(
+					key = Callback(PlayVideoNotSupported, mediainfo = mediainfo),
+					title = source_item['name'] + " - " + source_item['provider_name'] + " (Not playable)",
+					summary= mediainfo.summary,
+					art=mediainfo.background,
+					thumb= mediainfo.poster,
+				)
+		}
+		
 	else:
-		return
+		return {}
 
 	
 ####################################################################################################
@@ -2304,7 +2426,7 @@ def MediaInfoLookup(url):
 	item = cerealizer.loads(Data.Load(BROWSED_ITEMS_KEY)).getByURL(decoded_url)
 
 	if (item is None):
-		Log("****** ERROR: Watching Item which hasn't been browsed to")
+		Log("****** ERROR: Watching Item which hasn't been browsed to (" + decoded_url + ")")
 		return ""
 	
 	# Return the media info that was stored in the recently browsed item.
@@ -2333,7 +2455,7 @@ def PlaybackStarted(url):
 		item = browsed_items.getByURL(decoded_url)
 		
 		if (item is None):
-			Log("****** ERROR: Watching Item which hasn't been browsed to")
+			Log("****** ERROR: Watching Item which hasn't been browsed to (" + decoded_url + ")")
 			return ""
 		
 		# We may just be an additional source and we're playing this on behalf of another

@@ -10,7 +10,7 @@ import Utils
 
 from MetaProviders import DBProvider, MediaInfo
 
-LMWT_URL = "http://www.letmewatchthis.ch/"
+LMWT_URL = "http://www.primewire.ag/"
 LMWT_SEARCH_URL= "%sindex.php"
 
 
@@ -19,13 +19,33 @@ def Init():
 	# Check for current provider URL.
 	if ('LMWT_URL' not in Dict):
 		Dict['LMWT_URL'] = LMWT_URL
+	
+	if (Prefs['use_alt_url']):
+	
+		alt_url = Prefs['alt_url']
 		
-	try:	
-		content = HTML.ElementFromURL("https://github.com/ReallyFuzzy/LetMeWatchThis.bundle/wiki/CurrentURI",cacheTime=0)
-		Dict['LMWT_URL'] = str(content.xpath("//div[@class='markdown-body']//a/@href")[0])
-	except Exception,ex:
-		Log(ex)
-		pass
+		Log("Using Alternative URL (%s)..." % alt_url)
+		
+		# Check we have http:// at the front...
+		if (not alt_url.startswith('http://') and not alt_url.startswith('https://')):
+			alt_url = 'http://' + alt_url
+		
+		# ... and a trailing slash.
+		if (not alt_url.endswith('/')):
+			alt_url = alt_url + '/'
+			
+		Dict['LMWT_URL'] = alt_url
+			
+	else:
+		try:
+			# Retrieve current URL as set on the plugin's wiki page.
+			content = HTML.ElementFromURL("https://github.com/ReallyFuzzy/LetMeWatchThis.bundle/wiki/CurrentURI",cacheTime=600)
+			Dict['LMWT_URL'] = str(content.xpath("//div[@class='markdown-body']//a/@href")[0])
+		except Exception,ex:
+			Log(ex)
+			pass
+
+	Log("Final site URL: (%s)" % Dict['LMWT_URL'])
 	
 	Dict['LMWT_SEARCH_URL'] = LMWT_SEARCH_URL % Dict['LMWT_URL']
 

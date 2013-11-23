@@ -1,5 +1,29 @@
 [
     {
+        "id": "sep-alt-url",
+        "type": "enum",
+        "label": "-------- Alternative Site URL: --------",
+        "values": [" -","-"],
+    },
+	{
+        "id": "use_alt_url",
+        "type": "bool",
+        "label": "Use aternative site URL:",
+        "default": "false"
+    },
+   {
+        "id": "alt_url",
+        "type": "text",
+        "label": "Alternative site URL:",
+        "default": ""
+    },
+    {
+        "id": "sep-watched",
+        "type": "enum",
+        "label": "-------- Watched Item Tracking: --------",
+        "values": [" -","-"],
+    },
+    {
         "id": "watched_amount",
         "type": "enum",
         "label": "Number of items in Recently Watched list:",
@@ -19,6 +43,12 @@
         "label": "Put an indcator for unwatched items in:",
         "values": ["Disabled", "TV Shows", "All"],
         "default": "TV Shows"
+    },
+    {
+        "id": "sep-favs",
+        "type": "enum",
+        "label": "--------- Favourites: --------",
+        "values": [" -","-"],
     },
     {
         "id": "favourite_sort",
@@ -46,6 +76,12 @@
         "default": "false"
     },
     {
+        "id": "sep-metadata",
+        "type": "enum",
+        "label": "--------- Meta Data: --------",
+        "values": [" -","-"],
+    },
+    {
         "id": "meta_retrieve",
         "type": "enum",
         "label": "Retrieve metadata from external providers:",
@@ -53,10 +89,23 @@
         "default": "All"
     },
     {
+        "id": "sep-other",
+        "type": "enum",
+        "label": "--------- Other: --------",
+        "values": [" -","-"],
+    },
+    
+    {
         "id": "versiontracking",
         "type": "bool",
         "label": "Help measure interest in this plugin",
         "default": "true"
+    },
+    {
+        "id": "sep-sources",
+        "type": "enum",
+        "label": "--------- Sources: --------",
+        "values": [" -","-"],
     },
     {
         "id": "show_unsupported",

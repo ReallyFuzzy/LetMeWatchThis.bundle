@@ -35,7 +35,7 @@ class MovieDBProvider(object):
 		#try:
 		
 			imdb_id = kwargs['imdb_id']
-			Log("Fetching info for: " + imdb_id)
+			#Log("Fetching info for: " + imdb_id)
 			
 			url = MOVIEDB_URL % quote_plus(unicode(imdb_id).encode('utf-8'))
 
