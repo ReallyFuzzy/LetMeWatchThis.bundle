@@ -94,7 +94,6 @@
         "label": "--------- Other: --------",
         "values": [" -","-"],
     },
-    
     {
         "id": "versiontracking",
         "type": "bool",
