@@ -1,5 +1,6 @@
 import re
 import urllib
+import urlparse
 import copy
 import sys
 
@@ -288,14 +289,14 @@ def GetTVSeasons(url):
 	soupMassage = copy.copy(BeautifulSoup.MARKUP_MASSAGE)
 	soupMassage.extend(headMassage)	
 	
-	soup = BeautifulSoup(HTTP.Request(Dict['LMWT_URL'] + url).content, markupMassage=soupMassage)
+	soup = BeautifulSoup(HTTP.Request(Dict['LMWT_URL'] + url).content, markupMassage=soupMassage, convertEntities=BeautifulSoup.HTML_ENTITIES)
 
 	seasons = []
 
 	for item in soup.find("div", { 'id': 'first' }).findAll('h2'):
 	
 		season = {}
-		season['season_name'] = str(item.a.string)
+		season['season_name'] = str(item.a.next.string[2:])
 		season['season_url'] = item.a['href'][1:] 
 		
 		match = re.search("Season (\d+)", season['season_name'])
@@ -338,6 +339,7 @@ def GetItems(type, genre = None, sort = None, alpha = None, pages = 5, start_pag
 	
 		page_num = page_num + 1
 		url = GetURL(type = type, genre = genre, sort = sort, alpha = alpha, page_num = page_num + start_page)
+		url_parts = urlparse.urlparse(url)
 		soup = BeautifulSoup(HTTP.Request(url).content)
 		
 		for item in soup.findAll("div", { 'class': 'index_item index_item_ie' }):
@@ -358,8 +360,15 @@ def GetItems(type, genre = None, sort = None, alpha = None, pages = 5, start_pag
 			# Extract out URL
 			res.id = item.a['href'][1:]
 			
-			# Extract out thumb
-			res.poster = item.find('img')['src']
+			# Extract out thumb. Note that extracted path may be relative.
+			poster_url = item.find('img')['src']
+			if poster_url.startswith("//"):
+				poster_url = url_parts.scheme + ":" + poster_url
+			elif poster_url.startswith("/"):
+				# Deal with fully-relative paths. Doesn't deal with partial relative paths.
+				poster_url = url_parts.scheme + "://" + url_parts.netloc + poster_url
+				
+			res.poster = poster_url
 			
 			# Extract out rating
 			rating_style = item.find('li')['style']
