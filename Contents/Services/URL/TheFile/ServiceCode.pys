@@ -65,7 +65,7 @@ def PlayVideo(url):
 	
 	# Extract out these form elements if present...
 	try:
-		formElems = ['down_direct', 'id', 'op', 'referer', 'rand']
+		formElems = ['op','usr_login','id', 'fname', 'referer', 'method_free']
 		params = {}
 		
 		for formElem in formElems:
@@ -74,6 +74,27 @@ def PlayVideo(url):
 			
 	except Exception, ex:
 		return LogProviderError("Error whilst extracting out form elemnts to navigate to 2nd page.",ex)
+	
+	# Navigate to 2nd page (page with Player on it)
+	try:
+		#Log('Requesting ' + url)
+		contents = HTTP.Request(url, values=params, headers={ 'Referer': url }, cacheTime=0).content
+		soup = BeautifulSoup(contents)	
+		
+	except Exception, ex:
+		return LogProviderError("Error whilst retrieving initial provider page (" + url + ")", ex)
+		
+	# Extract out these form elements if present...
+	try:
+		formElems = ['op', 'id', 'rand', 'referer', 'method_free']
+		params = {}
+		
+		for formElem in formElems:
+			formElemVal =  soup.find('input', {'name' : formElem })['value']
+			params[formElem] = formElemVal
+			
+	except Exception, ex:
+		return LogProviderError("Error whilst extracting out form elements to navigate to download page.",ex)
 		
 	
 	# Navigate to download page.
@@ -116,5 +137,4 @@ def PlayVideo(url):
 def LogProviderError(msg="", ex=None):
 
 	Log("************************** PROVIDER ERROR: " + msg)
-	raise Exception(msg)
-	return []
+	raise Ex.MediaNotAvailable
