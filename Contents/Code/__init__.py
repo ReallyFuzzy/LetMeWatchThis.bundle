@@ -710,8 +710,8 @@ def TVSeasonMenu(mediainfo=None, url=None, item_name=None, path=[], parent_name=
 					parent_name=oc.title2,
 				),
 				title=indicator + item['season_name'],
-				tagline="",
-				summary="",
+				tagline=mediainfo.show_name + " - " + item['season_name'],
+				summary=mediainfo.show_name + " - " + item['season_name'],
 				thumb=mediainfo_season.poster,
 				art=mediainfo_season.background,
 			)

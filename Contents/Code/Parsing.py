@@ -268,10 +268,10 @@ def GetTVSeasonEps(url, no_cache=False):
 		ep['ep_name'] = title
 		ep['ep_url'] =item.a['href'][1:]
 		
-		match = re.search("Episode (\d+)", ep['ep_name'])
+		match = re.search("E(pisode)?\s*(\d+)", ep['ep_name'])
 		
 		if match:
-			ep['ep_num'] = int(match.group(1))
+			ep['ep_num'] = int(match.group(2))
 		
 		eps.append(ep)
 		
