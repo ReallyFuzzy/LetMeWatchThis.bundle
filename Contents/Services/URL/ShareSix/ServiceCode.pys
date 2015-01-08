@@ -91,7 +91,7 @@ def PlayVideo(url):
 		final_url = res.group(1)
 		final_url = final_url.replace(" ","+")
 		
-		# PHT Doesn't honour user_agent property. Thankfully, it uses CurlLib and that
+		# PHT Doesn't honour user_agent property. Thankfully, it uses libCurl and that
 		# accepts args at the end of the url.
 		if Client.Platform == "Plex Home Theater":
 			final_url = final_url + "|User-Agent=" + USER_AGENT
