@@ -14,7 +14,7 @@ def NormalizeURL(url):
 	if ("providerinfo" in url):
 	
 		# Extract out domain.
-		match = re.search("(sharesix)", url.lower())
+		match = re.search("(sharesix|filenuke)", url.lower())
 		if (match is None):
 			return url
 	
@@ -56,7 +56,7 @@ def PlayVideo(url):
 		
 	# Request Initial Provider page.
 	try:
-		#Log('Requesting ' + url)
+		Log('Requesting ' + url)
 		soup = BeautifulSoup(HTTP.Request(url).content)
 		
 	except Exception, ex:
