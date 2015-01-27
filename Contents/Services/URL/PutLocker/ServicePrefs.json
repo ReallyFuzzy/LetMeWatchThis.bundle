@@ -1,1 +1,10 @@
-[	{		"id": "show_putlocker", "label": "PutLocker",		"type": "bool", "default": "true",	},	{		"id": "show_sockshare", "label": "SockShare",		"type": "bool", "default": "true",	},]
+[
+	{
+		"id": "show_putlocker", "label": "PutLocker",
+		"type": "bool", "default": "true",
+	},
+	{
+		"id": "show_sockshare", "label": "SockShare",
+		"type": "bool", "default": "true",
+	},
+]

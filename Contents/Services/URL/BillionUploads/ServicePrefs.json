@@ -1,1 +1,6 @@
-[	{		"id": "show_billionuploads", "label": "BillionUploads",		"type": "bool", "default": "true",	},]
+[
+	{
+		"id": "show_billionuploads", "label": "BillionUploads",
+		"type": "bool", "default": "true",
+	},
+]

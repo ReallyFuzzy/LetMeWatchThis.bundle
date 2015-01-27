@@ -1,1 +1,6 @@
-[	{		"id": "show_thefile", "label": "TheFile",		"type": "bool", "default": "true"	}]
+[
+	{
+		"id": "show_thefile", "label": "TheFile",
+		"type": "bool", "default": "true"
+	}
+]

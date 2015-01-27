@@ -1,1 +1,206 @@
-import re, urlparse, cgi, urllib, urllib2, cookielib, urlparse, stringfrom datetime import datefrom BeautifulSoup import BeautifulSoup	USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_7_2) AppleWebKit/534.51.22 (KHTML, like Gecko) Version/5.1.1 Safari/534.51.22'def NormalizeURL(url):	#Log("*********** In Zalaa normalizeURL")		# Deal with special providerInfo URL built up by plugin to return	# info about this provider. For all other normal URLs, do nothing. 	if ("providerinfo" in url):			match = re.search("(zalaa|uploadc)", url.lower())		if (match is None):			return url			try:			show = Prefs["show_" + match.group(1)]		except Exception, ex:			show = False					if (show):			return url + "&visible=true"		else:			return url				else:		return url		def MetadataObjectForURL(url): 	#Log('In MetadataObjectForURL for Zalaa (' + url + ')')		# LMWT Plugin should have access to info about this URL if user used plugin to launch video.	return VideoClipObject(		title = 'Zalaa Redirect Page',		summary = 'Zalaa Redirect Page',		thumb = None,	)def MediaObjectsForURL(url):	#Log('In MetadataObjectForURL for Zalaa (' + url + ')')	return [		MediaObject(			parts = [PartObject(key=Callback(PlayVideo, url=url))],		)	]	@indirect	def PlayVideo(url):	#Log('In MediaObjectsForURL for Zalaa (' + url + ')')		### 1st Page	# Request provider page.	try:		#Log('Requesting ' + url)		request = urllib2.Request(url)		request.add_header('User-agent', USER_AGENT)		response = urllib2.urlopen(request)				# Collect final url (in case of 302 or the like) and read in page.		provider_url = response.geturl()		#Log(provider_url)		soup = BeautifulSoup(response.read())			except Exception, ex:		return LogProviderError("Error whilst retrieving initial provider page (" + url + ")", ex)				# Extract out these form elements from the provider page...	try:		formElems = ['op', 'id', 'fname', 'method_free', 'referer', 'usr_login', 'ipcount_val']		params = {}				for formElem in formElems:			formElemVal =  soup.find('input', {'name' : formElem })['value']			params[formElem] = formElemVal	except Exception, ex:		return LogProviderError("Error whilst retrieving information to go from intial page to next page. Page URL was: " + url, ex)					#Log(params)		### 2nd Page	# Submit the form from the 1st page to get 2nd page.	try:		HTTP.Headers['User-agent'] = USER_AGENT		headers = { 'Referer': provider_url }		content = HTTP.Request(provider_url, cacheTime=0, values=params, headers=headers).content		soup = BeautifulSoup(content)	except Exception, ex:		return LogProviderError("Error whilst retrieving 2nd page (" + provider_url + ")", ex)					#Log(content)		### 3rd Page (if needed....)	# This looks to be a new page but may not have been rolled out everywhere.	# so see if it's part of the nav we're going through rather than blindly	# assuming it'll be there.	if (soup.find('td', {'id': 'btndnlbt' }) is not None):			try:			headers = { 'Referer': provider_url }			dld_url = soup.find('td', {'id': 'btndnlbt' }).a['href']			content = HTTP.Request(dld_url, cacheTime=0, headers=headers).content		except Exception, ex:			return LogProviderError("Error whilst retrieving 3rd page (" + dld_url + ")", ex)					soup = BeautifulSoup(content)			final_url = None			# See how we're going to retrieve the file name....	if (soup.find('span', { 'id' : 'flvplayerid' })) is None:				try:			script = soup.find('script', text=re.compile("function\(p,a,c,k,e,d\)"))			#Log(script)						# Look for substitution values.			elems = re.search("\d{2},'([^']*)'.split", script).group(1).split('|')			#Log(elems)						# Look for url to substitute values into.			video_url = re.search("([0-9a-z]*://[0-9a-z]*\.[0-9a-z]*\.[0-9a-z]*\:[0-9a-z]*/([0-9a-z]*/?)*[0-9a-z.\-_ ()]*)", script)			#Log(video_url)						# Create dict to map url sub keys to sub values.			alphadict = dict()			for index_cnt in range(0, 2):				index = index_cnt * len(string.digits + string.ascii_lowercase)				strindex = str(index_cnt) if index_cnt > 0 else ""				for cnt in range(0, len(string.digits + string.ascii_lowercase)):					alphadict[strindex + (string.digits + string.ascii_lowercase)[cnt]] = cnt + index							def SubElem(matchObj):				val = elems[alphadict[matchObj.group(0)]]				if (val == ""):					val = matchObj.group(0)				return val				# Sub values into url.			final_url = re.sub("[0-9a-z]{1,2}", SubElem, video_url.group(1)) 					except Exception, ex:			return LogProviderError("Error whilst unpacking video URL.", ex)	else:			try:			# Get file URL.			#Log("Using FLV Player")			file = re.search("s1.addVariable\('file','([^']*)'\);", content)					if file is None:				return LogProviderError("Error whilst extracting out video URL from FLV player config.")						final_url = file.group(1)					except Exception, ex:			return LogProviderError("Error whilst reading video URL.", ex)	Log(final_url)		# ALERT: What follows is a complete and utter hack! This will break.	#	# We need to pass in a referer along with the final_url, but there's no official	# way of doing that. The only supported headers are Cookies and User-Agent. So, we	# hack around that by passing in a user agent string ended with a \r\n (i.e: new line)	# escape sequence and then append the needed header to that. When the clients use	# the given user agent string, the referer will appear on it's own line and be	# promoted to a fully fledged header. 	#	# This is a hack that fully relies on the clients not escaping their input correctly.	http_headers = { 'User-Agent': USER_AGENT + "\r\nReferer: " + provider_url }		# Oh... And let's not forget that some clients don't even bother supporting the officially	# supported headers <cough>PHT</cough>. Thankfully, PHT uses libCurl to deal with HTTP	# transfers and that supports passing headers by appending them to the end of the URL	# separated by a |	if Client.Platform == "Plex Home Theater":		final_url = final_url + "|User-Agent=" + USER_AGENT + "\r\nReferer: " + provider_url	return ObjectContainer(		http_headers = http_headers,		objects = [			VideoClipObject(				items = [					MediaObject(						parts = [PartObject(key=final_url)]					)				]			)		]	)	def LogProviderError(msg="", ex=None):	Log("************************** PROVIDER ERROR: " + msg)	raise Ex.MediaNotAvailable
+import re, urlparse, cgi, urllib, urllib2, cookielib, urlparse, string
+from datetime import date
+from BeautifulSoup import BeautifulSoup
+	
+USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_7_2) AppleWebKit/534.51.22 (KHTML, like Gecko) Version/5.1.1 Safari/534.51.22'
+
+def NormalizeURL(url):
+
+	#Log("*********** In Zalaa normalizeURL")
+	
+	# Deal with special providerInfo URL built up by plugin to return
+	# info about this provider. For all other normal URLs, do nothing. 
+	if ("providerinfo" in url):
+	
+		match = re.search("(zalaa|uploadc)", url.lower())
+		if (match is None):
+			return url
+	
+		try:
+			show = Prefs["show_" + match.group(1)]
+		except Exception, ex:
+			show = False
+			
+		if (show):
+			return url + "&visible=true"
+		else:
+			return url
+			
+	else:
+		return url
+		
+def MetadataObjectForURL(url):
+ 
+	#Log('In MetadataObjectForURL for Zalaa (' + url + ')')
+	
+	# LMWT Plugin should have access to info about this URL if user used plugin to launch video.
+	return VideoClipObject(
+		title = 'Zalaa Redirect Page',
+		summary = 'Zalaa Redirect Page',
+		thumb = None,
+	)
+
+def MediaObjectsForURL(url):
+
+	#Log('In MetadataObjectForURL for Zalaa (' + url + ')')
+
+	return [
+		MediaObject(
+			parts = [PartObject(key=Callback(PlayVideo, url=url))],
+		)
+	]
+	
+@indirect	
+def PlayVideo(url):
+
+	#Log('In MediaObjectsForURL for Zalaa (' + url + ')')
+	
+	### 1st Page
+	# Request provider page.
+	try:
+		#Log('Requesting ' + url)
+		request = urllib2.Request(url)
+		request.add_header('User-agent', USER_AGENT)
+		response = urllib2.urlopen(request)
+		
+		# Collect final url (in case of 302 or the like) and read in page.
+		provider_url = response.geturl()
+		#Log(provider_url)
+
+		soup = BeautifulSoup(response.read())
+		
+	except Exception, ex:
+		return LogProviderError("Error whilst retrieving initial provider page (" + url + ")", ex)
+		
+	
+	# Extract out these form elements from the provider page...
+	try:
+		formElems = ['op', 'id', 'fname', 'method_free', 'referer', 'usr_login', 'ipcount_val']
+		params = {}
+		
+		for formElem in formElems:
+			formElemVal =  soup.find('input', {'name' : formElem })['value']
+			params[formElem] = formElemVal
+	except Exception, ex:
+		return LogProviderError("Error whilst retrieving information to go from intial page to next page. Page URL was: " + url, ex)
+				
+	#Log(params)
+	
+	### 2nd Page
+	# Submit the form from the 1st page to get 2nd page.
+	try:
+		HTTP.Headers['User-agent'] = USER_AGENT
+		headers = { 'Referer': provider_url }
+		content = HTTP.Request(provider_url, cacheTime=0, values=params, headers=headers).content
+		soup = BeautifulSoup(content)
+	except Exception, ex:
+		return LogProviderError("Error whilst retrieving 2nd page (" + provider_url + ")", ex)
+			
+	
+	#Log(content)
+	
+	### 3rd Page (if needed....)
+	# This looks to be a new page but may not have been rolled out everywhere.
+	# so see if it's part of the nav we're going through rather than blindly
+	# assuming it'll be there.
+	if (soup.find('td', {'id': 'btndnlbt' }) is not None):
+	
+		try:
+			headers = { 'Referer': provider_url }
+			dld_url = soup.find('td', {'id': 'btndnlbt' }).a['href']
+			content = HTTP.Request(dld_url, cacheTime=0, headers=headers).content
+		except Exception, ex:
+			return LogProviderError("Error whilst retrieving 3rd page (" + dld_url + ")", ex)
+			
+		soup = BeautifulSoup(content)
+		
+	final_url = None
+		
+	# See how we're going to retrieve the file name....
+	if (soup.find('span', { 'id' : 'flvplayerid' })) is None:
+		
+		try:
+			script = soup.find('script', text=re.compile("function\(p,a,c,k,e,d\)"))
+			#Log(script)
+			
+			# Look for substitution values.
+			elems = re.search("\d{2},'([^']*)'.split", script).group(1).split('|')
+			#Log(elems)
+			
+			# Look for url to substitute values into.
+			video_url = re.search("([0-9a-z]*://[0-9a-z]*\.[0-9a-z]*\.[0-9a-z]*\:[0-9a-z]*/([0-9a-z]*/?)*[0-9a-z.\-_ ()]*)", script)
+			#Log(video_url)
+			
+			# Create dict to map url sub keys to sub values.
+			alphadict = dict()
+			for index_cnt in range(0, 2):
+				index = index_cnt * len(string.digits + string.ascii_lowercase)
+				strindex = str(index_cnt) if index_cnt > 0 else ""
+				for cnt in range(0, len(string.digits + string.ascii_lowercase)):
+					alphadict[strindex + (string.digits + string.ascii_lowercase)[cnt]] = cnt + index
+				
+			def SubElem(matchObj):
+				val = elems[alphadict[matchObj.group(0)]]
+				if (val == ""):
+					val = matchObj.group(0)
+				return val
+	
+			# Sub values into url.
+			final_url = re.sub("[0-9a-z]{1,2}", SubElem, video_url.group(1)) 
+			
+		except Exception, ex:
+			return LogProviderError("Error whilst unpacking video URL.", ex)
+
+	else:
+	
+		try:
+			# Get file URL.
+			#Log("Using FLV Player")
+			file = re.search("s1.addVariable\('file','([^']*)'\);", content)
+		
+			if file is None:
+				return LogProviderError("Error whilst extracting out video URL from FLV player config.")
+			
+			final_url = file.group(1)
+			
+		except Exception, ex:
+			return LogProviderError("Error whilst reading video URL.", ex)
+
+	Log(final_url)
+	
+	# ALERT: What follows is a complete and utter hack! This will break.
+	#
+	# We need to pass in a referer along with the final_url, but there's no official
+	# way of doing that. The only supported headers are Cookies and User-Agent. So, we
+	# hack around that by passing in a user agent string ended with a \r\n (i.e: new line)
+	# escape sequence and then append the needed header to that. When the clients use
+	# the given user agent string, the referer will appear on it's own line and be
+	# promoted to a fully fledged header. 
+	#
+	# This is a hack that fully relies on the clients not escaping their input correctly.
+	http_headers = { 'User-Agent': USER_AGENT + "\r\nReferer: " + provider_url }
+	
+	# Oh... And let's not forget that some clients don't even bother supporting the officially
+	# supported headers <cough>PHT</cough>. Thankfully, PHT uses libCurl to deal with HTTP
+	# transfers and that supports passing headers by appending them to the end of the URL
+	# separated by a |
+	if Client.Platform == "Plex Home Theater":
+		final_url = final_url + "|User-Agent=" + USER_AGENT + "\r\nReferer: " + provider_url
+
+	return ObjectContainer(
+		http_headers = http_headers,
+		objects = [
+			VideoClipObject(
+				items = [
+					MediaObject(
+						parts = [PartObject(key=final_url)]
+					)
+				]
+			)
+		]
+	)
+	
+def LogProviderError(msg="", ex=None):
+
+	Log("************************** PROVIDER ERROR: " + msg)
+	raise Ex.MediaNotAvailable
