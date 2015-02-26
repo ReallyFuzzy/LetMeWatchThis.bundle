@@ -182,8 +182,14 @@ def GetSources(url):
 
 		source = {}
 		
+		# Look for a sane source element.
+		source_elem = item.find('span', { 'class' : 'movie_version_link' }).a
+		
+		if (source_elem is None):
+			continue
+		
 		# Extract out source URL
-		source['url'] = str(item.find('span', { 'class' : 'movie_version_link' }).a['href'][1:])
+		source['url'] = source_elem['href'][1:]
 		
 		# Extract out source name.
 		source['name'] = str(item.find('span', { 'class' : 'movie_version_link' }).a.string)
